@@ -1,0 +1,26 @@
+.input-canvas-container {
+    position: relative;
+    transition: background-color 0.2s ease;
+}
+
+.input-canvas-container.drag-over {
+    background-color: #f0f8ff;
+    cursor: copy;
+}
+
+.input-canvas-container.drag-over .konvajs-content {
+    cursor: copy;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.animate-pulse {
+    animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+} 
