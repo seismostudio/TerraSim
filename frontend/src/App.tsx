@@ -14,6 +14,7 @@ import { MaterialModal } from './component/MaterialModal';
 import { SettingsModal } from './component/SettingsModal';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthModal } from './component/AuthModal';
+import { parseDXF } from './utils/dxfImport';
 
 function MainApp() {
     const { isValid, incrementRunningCount } = useAuth();
@@ -44,7 +45,29 @@ function MainApp() {
     const [selectedEntity, setSelectedEntity] = useState<{ type: string, id: string | number } | null>(null);
 
 
+
     // 4. Handlers
+    const handleImportDXF = async (file: File) => {
+        try {
+            const importedPolygons = await parseDXF(file);
+            if (importedPolygons.length > 0) {
+                // Determine material ID (use first available or default)
+                const materialId = materials[0]?.id || 'default';
+                const polygonsWithMaterial = importedPolygons.map(p => ({
+                    ...p,
+                    materialId
+                }));
+                setPolygons([...polygons, ...polygonsWithMaterial]);
+                alert(`Successfully imported ${importedPolygons.length} polygons.`);
+            } else {
+                alert("No closed polygons or regions found in DXF.");
+            }
+        } catch (error) {
+            console.error("Import failed:", error);
+            alert("Failed to import DXF file. See console for details.");
+        }
+    };
+
     const handleSaveMaterial = (mat: Material) => {
         setMaterials(materials.map(m => m.id === mat.id ? mat : m));
         setEditingMaterial(null);
@@ -254,6 +277,7 @@ function MainApp() {
                 drawMode={drawMode}
                 onDrawModeChange={setDrawMode}
                 onOpenSettings={() => setIsSettingsModalOpen(true)}
+                onImportDXF={handleImportDXF}
             />
 
             <div className="flex-1 flex overflow-hidden relative">

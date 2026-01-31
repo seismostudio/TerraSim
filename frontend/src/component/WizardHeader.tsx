@@ -1,4 +1,4 @@
-import { Settings, Folder, Square, ArrowDownToDot, Pen, ChartNoAxesColumnIncreasing, ChartNoAxesColumnDecreasing, LogOut } from 'lucide-react';
+import { Settings, Folder, Square, ArrowDownToDot, Pen, ChartNoAxesColumnIncreasing, ChartNoAxesColumnDecreasing, LogOut, ArrowDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export enum WizardTab {
@@ -14,6 +14,7 @@ interface WizardHeaderProps {
     drawMode: string | null;
     onDrawModeChange: (mode: string | null) => void;
     onOpenSettings: () => void;
+    onImportDXF?: (file: File) => void;
 }
 
 export const WizardHeader: React.FC<WizardHeaderProps> = ({
@@ -21,7 +22,8 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
     onTabChange,
     drawMode,
     onDrawModeChange,
-    onOpenSettings
+    onOpenSettings,
+    onImportDXF
 }) => {
     const { user, logout } = useAuth();
     const tabs = [
@@ -89,8 +91,28 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
                 })}
                 {activeTab === WizardTab.INPUT && (
                     <div className="flex items-center gap-2 border-l pl-2 border-slate-700">
+                        <label
+                            className="cursor-pointer w-10 relative py-2 px-2 text-sm transition-all border-b-2 h-full text-slate-400 border-transparent hover:text-slate-300 hover:bg-slate-700/50 flex items-center justify-center"
+                            title="Import DXF (Polylines)"
+                        >
+                            <input
+                                type="file"
+                                accept=".dxf"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file && onImportDXF) {
+                                        onImportDXF(file);
+                                    }
+                                    e.target.value = ''; // Reset input
+                                }}
+                            />
+                            <Folder className="w-5 h-5" />
+                            <ArrowDown className="absolute bottom-0 w-4 h-4" />
+                        </label>
                         <button
                             onClick={() => onDrawModeChange(drawMode === 'polygon' ? null : 'polygon')}
+                            title="Draw Polygon"
                             className={`cursor-pointer w-10 relative  py-2 px-2 text-sm transition-all border-b-2 h-full ${drawMode === 'polygon' ? 'text-blue-500 border-blue-500 font-bold rounded-t-lg bg-blue-600/20' : 'text-slate-400 border-transparent hover:text-slate-300'}`}
                         >
                             <Folder />
@@ -98,6 +120,7 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
                         </button>
                         <button
                             onClick={() => onDrawModeChange(drawMode === 'rectangle' ? null : 'rectangle')}
+                            title="Draw Rectangle"
                             className={`cursor-pointer w-10 relative py-2 px-2 text-sm transition-all border-b-2 h-full ${drawMode === 'rectangle' ? 'text-blue-500 border-blue-500 font-bold rounded-t-lg bg-blue-600/20' : 'text-slate-400 border-transparent hover:text-slate-300'}`}
                         >
                             <Square />
@@ -105,12 +128,14 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
                         </button>
                         <button
                             onClick={() => onDrawModeChange(drawMode === 'point_load' ? null : 'point_load')}
+                            title="Draw Point Load"
                             className={`cursor-pointer w-10 relative py-2 px-2 text-sm transition-all border-b-2 h-full ${drawMode === 'point_load' ? 'text-blue-500 border-blue-500 font-bold rounded-t-lg bg-blue-600/20' : 'text-slate-400 border-transparent hover:text-slate-300'}`}
                         >
                             <ArrowDownToDot />
                         </button>
                         <button
                             onClick={() => onDrawModeChange(drawMode === 'water_level' ? null : 'water_level')}
+                            title="Draw Water Level"
                             className={`cursor-pointer w-10 relative py-2 px-2 text-sm transition-all border-b-2 h-full ${drawMode === 'water_level' ? 'text-blue-500 border-blue-500 font-bold rounded-t-lg bg-blue-600/20' : 'text-slate-400 border-transparent hover:text-slate-300'}`}
                         >
                             <ChartNoAxesColumnIncreasing className='absolute bottom-2.5 left-1 w-5 h-5 -rotate-90' />
