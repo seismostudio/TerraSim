@@ -1,46 +1,72 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@import "tailwindcss";
 
-  color-scheme: light dark;
-  color: rgba(0, 0, 0, 0.87);
-  background-color: #f5f5f5;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@theme {
+  --color-primary: #3b82f6;
+  --color-surface: #1e293b;
+  --color-border: #334155;
 }
-
 
 body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  @apply bg-slate-900 text-slate-100 overflow-hidden;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+#root {
+  height: 100vh;
+  width: 100vw;
 }
 
-button {
-  cursor: pointer;
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
+.custom-scrollbar::-webkit-scrollbar-track {
+  @apply bg-slate-800/50;
+}
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-slate-700 rounded-full hover:bg-slate-600 transition-colors;
+}
+
+/* Selection */
+::selection {
+  @apply bg-blue-500/30 text-white;
+}
+
+.dropdownlabel {
+  @apply cursor-pointer w-full flex items-center justify-between px-4 py-2 bg-slate-800 text-sm font-semibold text-slate-400 tracking-wider border-b border-slate-700;
+}
+
+.titlelabel {
+  @apply text-sm font-semibold text-slate-100;
+}
+
+.itemlabel {
+  @apply text-xs text-slate-100;
+}
+
+.sublabel {
+  @apply text-[9px] text-slate-300;
+}
+
+.transition {
+  @apply transition-all ease-in-out duration-300;
+}
+
+.add-button {
+  @apply cursor-pointer w-full py-2 bg-blue-500/10 text-blue-400 rounded-lg text-xs border border-dashed border-blue-500/50 transition-all;
+}
+
+.add-button:hover {
+  @apply bg-blue-500/20 text-blue-400;
+}
+
+.input {
+  @apply w-full bg-slate-800 text-xs border border-slate-700 text-slate-100 p-2 rounded outline-none transition-colors;
+}
+
+.input:focus {
+  @apply border-blue-500;
 }

@@ -1,145 +1,403 @@
-"""
-Main Program for CST FEA Analysis - Soil Analysis
-Loads input data, runs analysis, and displays results for geotechnical analysis
-"""
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+import json
+import asyncio
+from contextlib import asynccontextmanager
 
-import numpy as np
-from input_data import load_input_data
-from fea_solver import FEASolver
-from visualization import FEAVisualizer
+from backend.models import MeshRequest, MeshResponse, SolverRequest, SolverResponse, SolverSettings, MeshResponse, BoundaryConditionsResponse, BoundaryCondition, PointLoadAssignment, ElementMaterial, Material
+from backend.mesh_generator import generate_mesh
+from backend.fea_solver import solve_phases
+from backend.legacy_models import LegacySequentialRequest, LegacySequentialResponse, LegacyStageResult
 
-def main():
-    """Main function to run the soil FEA analysis"""
-    print("=== CST FEA Analysis Program - Soil Analysis ===")
-    print("Loading input data...")
+# Metadata
+TAGS_METADATA = [
+    {
+        "name": "mesh",
+        "description": "Mesh generation operations",
+    },
+    {
+        "name": "solver",
+        "description": "FEA Solver operations",
+    },
+    {
+        "name": "legacy",
+        "description": "Compatibility endpoints",
+    },
+]
+
+app = FastAPI(
+    title="DaharTerraSim Backend",
+    description="Geotechnical Analysis Backend using CST FEA 2D",
+    version="2.1.0",
+    openapi_tags=TAGS_METADATA
+)
+
+# CORS Configuration
+origins = [
+    "http://localhost:5173", # Vite default
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "*" # Allow all for dev convenience
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+async def root():
+    return {"message": "DaharTerraSim Backend API v2.1 - Active"}
+
+@app.post("/api/mesh/generate", response_model=MeshResponse, tags=["mesh"])
+async def create_mesh(request: MeshRequest):
+    """
+    Generate a 2D triangular mesh based on provided polygons and settings.
+    """
+    print(f"Received mesh generation request with {len(request.polygons)} polygons")
+    try:
+        response = generate_mesh(request)
+        if not response.success:
+             return response
+        return response
+    except Exception as e:
+        print(f"Error processing mesh request: {e}")
+        return MeshResponse(
+            success=False,
+            nodes=[],
+            elements=[],
+            boundary_conditions={"full_fixed": [], "normal_fixed": []},
+            point_load_assignments=[],
+            element_materials=[],
+            error=str(e)
+        )
+
+@app.post("/api/solver/calculate", tags=["solver"])
+async def run_solver(request: SolverRequest, raw_request: Request):
+    """
+    Run Initial Phase FEA (Gravity Loading) using MStage load advancement.
+    Returns a stream of progress logs and results.
+    """
+    print("Received streaming solver request.")
     
-    # Load input data
-    geometry, material, boundary_conditions = load_input_data()
+    async def event_generator():
+        stop_flag = [False]
+        
+        async def monitor_disconnect():
+            while not stop_flag[0]:
+                if await raw_request.is_disconnected():
+                    print("Client disconnected, stopping solver...")
+                    stop_flag[0] = True
+                    break
+                await asyncio.sleep(0.5)
+        
+        monitor_task = asyncio.create_task(monitor_disconnect())
+        
+        try:
+            loop = asyncio.get_event_loop()
+            # Generator should check stop_flag via lambda
+            gen = solve_phases(request, should_stop=lambda: stop_flag[0])
+            
+            while True:
+                try:
+                    # Run iteration in thread pool to keep loop free
+                    # Use None as sentinel to avoid StopIteration being raised into Future
+                    item = await loop.run_in_executor(None, next, gen, None)
+                    if item is None: break
+                    yield json.dumps(jsonable_encoder(item)) + "\n"
+                    if stop_flag[0]: break
+                except StopIteration:
+                    break
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            from backend.error import ErrorCode, get_error_info
+            msg = f"{get_error_info(ErrorCode.SYS_INTERNAL_ERROR)} | Raw: {str(e)}"
+            yield json.dumps({"type": "log", "content": msg}) + "\n"
+        finally:
+            stop_flag[0] = True
+            monitor_task.cancel()
+
+    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+
+@app.post("/api/sequential/analyze", response_model=LegacySequentialResponse, tags=["legacy"])
+async def run_sequential_analysis(request: LegacySequentialRequest):
+    """
+    Adapter endpoint for Front-end compatibility.
+    Only supports 'Initial Stage' currently by mapping to solve_initial_phase.
+    """
+    print(f"Received sequential analysis request with {len(request.stages)} stages.")
     
-    print(f"Geometry loaded: {geometry.num_nodes} nodes, {geometry.num_elements} elements")
-    print(f"Soil properties:")
-    print(f"  - Young's modulus: {material.young_modulus:.0f} kN/m²")
-    print(f"  - Poisson's ratio: {material.poisson_ratio}")
-    print(f"  - Unit weight: {material.unit_weight:.1f} kN/m³")
-    print(f"  - Cohesion: {material.cohesion:.0f} kN/m²")
-    print(f"  - Friction angle: {material.friction_angle:.1f}°")
-    print(f"  - Thickness (plane strain): {material.thickness:.1f} m")
+    stage_results = []
     
-    print(f"Boundary conditions:")
-    print(f"  - Fixed nodes: {[i+1 for i in boundary_conditions.fixed_nodes]}")
-    print(f"  - Applied forces: {len(boundary_conditions.applied_forces)} foundation loads")
-    print(f"  - Gravity loads: {'Yes' if boundary_conditions.gravity_loads else 'No'}")
-    print(f"  - Water table: {boundary_conditions.water_table:.1f} m from bottom")
-    
-    # Create and run FEA solver
-    print("\nRunning soil FEA analysis...")
-    solver = FEASolver(geometry, material, boundary_conditions)
+    # We only process the first stage for now as per instructions (Initial Phase focus)
+    # or loop through them? The user said "initial phase" focus.
+    # We'll try to process the first valid FEA stage.
     
     try:
-        displacements = solver.solve()
-        print("Analysis completed successfully!")
-        
-        # Get results
-        element_results = solver.get_element_results()
-        nodal_displacements = solver.get_nodal_displacements()
-        soil_results = solver.get_soil_specific_results()
-        
-        # Print summary results
-        print("\n=== Soil Analysis Results Summary ===")
-        max_displacement = max([d['magnitude'] for d in nodal_displacements])
-        max_settlement = max([abs(d['v']) for d in nodal_displacements])
-        
-        print(f"Maximum displacement: {max_displacement:.6f} m")
-        print(f"Maximum settlement: {max_settlement:.6f} m")
-        print(f"Maximum effective stress: {soil_results['max_effective_stress']:.2f} kN/m²")
-        print(f"Maximum principal stress: {soil_results['max_principal_stress']:.2f} kN/m²")
-        # print(f"Maximum pore water pressure: {soil_results['max_pore_water_pressure']:.2f} kN/m²")
-        print(f"Minimum safety factor: {soil_results['min_safety_factor']:.2f}")
-        
-        # ✅ Print stress history if available
-        stress_history_summary = solver.get_stress_history_summary()
-        if stress_history_summary:
-            print(f"\n=== STRESS HISTORY ANALYSIS ===")
-            print(f"Stage type: {stress_history_summary['stage_type']}")
-            print(f"Initial stress max σ₁: {stress_history_summary['initial_stress_summary']['max_sigma_1']:.2f} kPa")
-            print(f"Incremental stress max σ₁: {stress_history_summary['incremental_stress_summary']['max_sigma_1']:.2f} kPa")
-            print(f"Final stress max σ₁: {stress_history_summary['final_stress_summary']['max_sigma_1']:.2f} kPa")
-            print(f"Stress increase: {stress_history_summary['incremental_stress_summary']['max_sigma_1']:.2f} kPa")
-            print(f"Stress evolution: {stress_history_summary['initial_stress_summary']['max_sigma_1']:.2f} → {stress_history_summary['final_stress_summary']['max_sigma_1']:.2f} kPa")
-        
-        # ✅ Print stress evolution report if available
-        stress_evolution_report = solver.get_stress_evolution_report()
-        if stress_evolution_report:
-            print(f"\n=== STRESS EVOLUTION REPORT ===")
-            print(f"Total elements: {stress_evolution_report['total_elements']}")
-            print(f"Elements with stress increase: {stress_evolution_report['stress_evolution_summary']['elements_with_stress_increase']}")
-            print(f"Elements with stress decrease: {stress_evolution_report['stress_evolution_summary']['elements_with_stress_decrease']}")
-            print(f"Elements with no change: {stress_evolution_report['stress_evolution_summary']['elements_with_no_change']}")
-            print(f"Max stress increase: {stress_evolution_report['stress_evolution_summary']['max_stress_increase']:.2f} kPa")
-            print(f"Max stress decrease: {stress_evolution_report['stress_evolution_summary']['max_stress_decrease']:.2f} kPa")
-            print(f"Average stress change: {stress_evolution_report['stress_evolution_summary']['average_stress_change']:.2f} kPa")
-        
-        # ✅ Print PWP history if available
-        pwp_history_summary = solver.get_pwp_history_summary()
-        if pwp_history_summary:
-            print(f"\n=== PWP HISTORY ANALYSIS ===")
-            print(f"Stage type: {pwp_history_summary['stage_type']}")
-            print(f"Hydrostatic PWP max: {pwp_history_summary['hydrostatic_pwp_summary']['max_pwp']:.2f} kPa")
-            print(f"Excess PWP max: {pwp_history_summary['excess_pwp_summary']['max_pwp']:.2f} kPa")
-            print(f"Total PWP max: {pwp_history_summary['total_pwp_summary']['max_pwp']:.2f} kPa")
-            print(f"Excess PWP contribution: {pwp_history_summary['excess_pwp_summary']['max_pwp']:.2f} kPa")
-            print(f"PWP evolution: {pwp_history_summary['hydrostatic_pwp_summary']['max_pwp']:.2f} → {pwp_history_summary['total_pwp_summary']['max_pwp']:.2f} kPa")
-        
-        # Find node with maximum settlement
-        max_settlement_node = max(nodal_displacements, key=lambda x: abs(x['v']))
-        print(f"Node with max settlement: Node {max_settlement_node['node_id']+1}")
-        print(f"  Settlement = {abs(max_settlement_node['v']):.6f} m")
-        
-        # Find element with minimum safety factor
-        min_safety_elem = min(element_results, key=lambda x: x['safety_factor'])
-        print(f"Element with min safety factor: Element {min_safety_elem['element_id']+1}")
-        print(f"  Safety factor = {min_safety_elem['safety_factor']:.2f}")
-        
-        # Print surface settlements
-        print(f"\nSurface settlements:")
-        for i, settlement in enumerate(soil_results['surface_settlements']):
-            print(f"  Node {i+1}: {settlement:.6f} m")
-        
-        # Stability assessment
-        print(f"\n=== Stability Assessment ===")
-        if soil_results['min_safety_factor'] > 1.5:
-            print("✓ Soil is STABLE (Safety factor > 1.5)")
-        elif soil_results['min_safety_factor'] > 1.0:
-            print("⚠ Soil is MARGINALLY STABLE (1.0 < Safety factor < 1.5)")
-        else:
-            print("✗ Soil is UNSTABLE (Safety factor < 1.0)")
-        
-        # Settlement assessment
-        print(f"\n=== Settlement Assessment ===")
-        if max_settlement < 0.025:  # 25 mm
-            print("✓ Settlement is ACCEPTABLE (< 25 mm)")
-        elif max_settlement < 0.050:  # 50 mm
-            print("⚠ Settlement is MODERATE (25-50 mm)")
-        else:
-            print("✗ Settlement is EXCESSIVE (> 50 mm)")
-        
-        # Prepare results for visualization
-        solver_results = {
-            'element_results': element_results,
-            'nodal_displacements': nodal_displacements,
-            'displacements': displacements,
-            'soil_results': soil_results
-        }
-        
-        # Create and run visualization
-        print("\nOpening visualization window...")
-        visualizer = FEAVisualizer(geometry, solver_results)
-        visualizer.run()
-        
+        for stage in request.stages:
+            print(f"Processing Stage: {stage.stage_name} ({stage.calculation_type})")
+            
+            # Map Legacy config to SolverRequest
+            
+            # Reconstruct Mesh Response Object from stage inputs
+            # The frontend sends "nodes", "elements", "materials" per stage.
+            
+            # 1. Nodes (Convert dict to list)
+            nodes_list = [[n['x'], n['y']] for n in stage.nodes]
+            
+            # 2. Elements (Convert dict to list [n1, n2, n3])
+            # Frontend uses 1-based IDs for nodes in 'element.node1', etc.
+            # Backend expects 0-based indices in 'elements' list.
+            elements_list = []
+            for el in stage.elements:
+                # Node IDs are 1-based in FE. Need to map to 0-based index if IDs are sequential 1..N
+                # Assuming standard sequential generation: ID 1 is index 0.
+                elements_list.append([el['node1']-1, el['node2']-1, el['node3']-1])
+            
+            # 3. Materials
+            # Map element_materials
+            # Stage.materials is list of {element_id, material: {...}}
+            elem_mats = []
+            for item in stage.materials:
+                # item is dict
+                mat_data = item['material']
+                # Create Pydantic Material
+                mat = Material(
+                    id=str(mat_data.get('id', 'unknown')),
+                    name=mat_data.get('name', 'Material'),
+                    color=mat_data.get('color', '#888888'),
+                    youngsModulus=float(mat_data.get('youngsModulus', 0)),
+                    effyoungsModulus=float(mat_data.get('effyoungsModulus', mat_data.get('youngsModulus', 0))),
+                    poissonsRatio=float(mat_data.get('poissonsRatio', 0)),
+                    unitWeightSaturated=float(mat_data.get('unitWeightSaturated', 0)),
+                    unitWeightUnsaturated=float(mat_data.get('unitWeightUnsaturated', 0)),
+                    cohesion=float(mat_data.get('cohesion', 0)),
+                    frictionAngle=float(mat_data.get('frictionAngle', 0)),
+                    undrainedShearStrength=float(mat_data.get('undrainedShearStrength', 0)),
+                    dilationAngle=float(mat_data.get('dilationAngle', 0)),
+                    thickness=float(mat_data.get('thickness', 1.0)),
+                    permeability=float(mat_data.get('permeability', 0)),
+                    voidRatio=float(mat_data.get('voidRatio', 0.5)),
+                    specificGravity=float(mat_data.get('specificGravity', 2.65)),
+                    # ✅ FIX: Map material_model and drainage_type from request
+                    material_model=mat_data.get('material_model', 'linear_elastic'),
+                    drainage_type=mat_data.get('drainage_type', 'drained')
+                )
+                elem_mats.append(ElementMaterial(
+                    element_id=item['element_id'],
+                    material=mat
+                ))
+
+            # 4. BCs
+            full_fixed = [BoundaryCondition(node=bc['node']-1) for bc in stage.boundaryConditionsFullFixed]
+            normal_fixed = [BoundaryCondition(node=bc['node']-1) for bc in stage.boundaryConditionsNormalFixed]
+
+            # Construct partial MeshResponse required for solver
+            mesh_proxy = MeshResponse(
+                success=True,
+                nodes=nodes_list,
+                elements=elements_list,
+                boundary_conditions=BoundaryConditionsResponse(full_fixed=full_fixed, normal_fixed=normal_fixed),
+                point_load_assignments=[], # handled via loads?
+                element_materials=elem_mats
+            )
+            
+            # 5. Settings
+            # Use defaults or infer from stage?
+            settings = SolverSettings() # Default
+            
+            # 6. Point Loads (from stage.loads)
+            # Frontend sends loads array with {node, fx, fy}
+            # Node IDs in stage.loads are 1-based, convert to 0-based
+            point_loads_data = []
+            if hasattr(stage, 'loads') and stage.loads:
+                from backend.models import PointLoadData
+                for load in stage.loads:
+                    point_loads_data.append(PointLoadData(
+                        node=load['node'] - 1,  # Convert to 0-based
+                        fx=load['fx'],
+                        fy=load['fy']
+                    ))
+                print(f"Extracted {len(point_loads_data)} point loads from stage")
+            
+            solver_req = SolverRequest(
+                mesh=mesh_proxy, 
+                settings=settings,
+                point_loads=point_loads_data
+            )
+            
+            # RUN SOLVER
+            # Only if it's "Initial" or "FEA"
+            solver_res = solve_initial_phase(solver_req)
+            
+            # Format Result for Frontend
+            # FE expects `stage_results` list.
+            
+            if solver_res.success:
+                # 1. Displacements
+                ux_vals = [d.ux for d in solver_res.displacements]
+                uy_vals = [d.uy for d in solver_res.displacements]
+                max_disp = max([max(abs(u), abs(v)) for u,v in zip(ux_vals, uy_vals)]) if ux_vals else 0
+                max_settlement = min(uy_vals) if uy_vals else 0
+                
+                fe_displacements = []
+                for d in solver_res.displacements:
+                    fe_displacements.append({
+                        "node_id": d.id - 1, # Convert to 0-based for Frontend Visualization
+                        "u": d.ux,  # FE expects "u" not "ux"
+                        "v": d.uy,  # FE expects "v" not "uy"
+                        "magnitude": (d.ux**2 + d.uy**2)**0.5
+                    })
+                
+                # 2. Element Stresses (Direct Map)
+                fe_stresses = []
+                # Map for averaging later
+                elem_stress_map = {} # elem_id -> stress_obj
+                
+                for s in solver_res.stresses:
+                    # Calculate Principal Stresses for Element (Mohr Circle)
+                    # s1,2 = (sx+sy)/2 +/- sqrt(((sx-sy)/2)^2 + txy^2)
+                    avg_s = (s.sig_xx + s.sig_yy) / 2.0
+                    r = ((s.sig_xx - s.sig_yy)**2 / 4.0 + s.sig_xy**2)**0.5
+                    s1 = avg_s + r
+                    s3 = avg_s - r
+                    
+                    st_obj = {
+                        "element_id": s.element_id, 
+                        "sig_xx": s.sig_xx,
+                        "sig_yy": s.sig_yy,
+                        "sig_xy": s.sig_xy,
+                        "sig_zz": s.sig_zz,
+                        "principal_stress_1": s1,
+                        "principal_stress_3": s3,
+                         # Effective approx same as total if no pore pressure yet
+                        "effective_stress_1": s1,
+                        "effective_stress_3": s3,
+                        # ✅ FIX: Pass plasticity flags
+                        "is_yielded": s.is_yielded,
+                        "yield_function": s.yield_function
+                    }
+                    fe_stresses.append(st_obj)
+                    elem_stress_map[s.element_id] = st_obj
+
+                # 3. Nodal Stress Smoothing (Averaging)
+                # We need to know which elements wrap which node.
+                # `elements_list` has 0-based indices.
+                
+                # Init accumulators
+                node_stress_sum = {} # node_id (1-based) -> {sx, sy, sz, sxy, count}
+                
+                # Check 0-based to 1-based consistency
+                # `elements_list` was built earlier in the loop (lines 144-150)
+                
+                for i, el_nodes_0 in enumerate(elements_list):
+                    elem_id = i + 1
+                    if elem_id not in elem_stress_map:
+                        continue
+                        
+                    s_el = elem_stress_map[elem_id]
+                    
+                    for n_idx_0 in el_nodes_0:
+                        n_id = n_idx_0 + 1
+                        if n_id not in node_stress_sum:
+                            node_stress_sum[n_id] = {'sx':0, 'sy':0, 'sz':0, 'sxy':0, 'count':0}
+                            
+                        node_stress_sum[n_id]['sx'] += s_el['sig_xx']
+                        node_stress_sum[n_id]['sy'] += s_el['sig_yy']
+                        node_stress_sum[n_id]['sz'] += s_el['sig_zz']
+                        node_stress_sum[n_id]['sxy'] += s_el['sig_xy']
+                        node_stress_sum[n_id]['count'] += 1
+                
+                fe_nodal_stresses = []
+                for n_id, data in node_stress_sum.items():
+                    c = data['count']
+                    if c > 0:
+                        sx = data['sx'] / c
+                        sy = data['sy'] / c
+                        sz = data['sz'] / c
+                        sxy = data['sxy'] / c
+                        
+                        # Principals
+                        avg_s = (sx + sy) / 2.0
+                        r = ((sx - sy)**2 / 4.0 + sxy**2)**0.5
+                        s1 = avg_s + r
+                        s3 = avg_s - r
+                        
+                        fe_nodal_stresses.append({
+                            "node_id": n_id - 1, # Convert to 0-based for Frontend Visualization
+                            "total_stress_x": sx,
+                            "total_stress_y": sy,
+                            "effective_stress_x": sx, # No water yet
+                            "effective_stress_y": sy,
+                            "pore_water_pressure": 0.0,
+                            "principal_stress_1": s1,
+                            "principal_stress_3": s3,
+                            "effective_principal_stress_1": s1,
+                            "effective_principal_stress_3": s3
+                        })
+
+                
+                result_payload = {
+                    "summary": {
+                        "max_displacement": max_disp,
+                        "max_settlement": max_settlement,
+                        "min_displacement": 0, 
+                        "steps_taken": solver_res.steps_taken,
+                        "final_m_stage": solver_res.final_m_stage
+                    },
+                    "nodal_displacements": fe_displacements,
+                    "element_results": fe_stresses, 
+                    "nodal_stress_strain": fe_nodal_stresses, 
+                    "logs": solver_res.log,
+                    # FE requires active_nodes indices to filter the node list.
+                    "active_nodes": list(range(len(nodes_list))), 
+                    # do NOT send active_elements, so FE falls back to full elementList with correct structure
+                }
+                
+                # However, for `active_nodes`, we MUST send it because the filter Logic is:
+                # `nodeList.filter((_, index) => results...active_nodes?.includes(index))`
+                # If active_nodes is undefined, includes() crashes or filter gets nothing?
+                # Actually `undefined?.includes()` returns undefined. Filter treats undefined as truthy??? No.
+                # In JS, filter predicate must return truthy. Undefined is falsy.
+                # So if active_nodes is missing, nodes=[]!
+                
+                # So we ADD active_nodes. 
+                
+                stage_results.append(LegacyStageResult(
+                    stage_id=stage.stage_id,
+                    stage_name=stage.stage_name,
+                    success=True,
+                    results=result_payload
+                ))
+            else:
+                 stage_results.append(LegacyStageResult(
+                    stage_id=stage.stage_id,
+                    stage_name=stage.stage_name,
+                    success=False,
+                    results={"error": solver_res.error or "Unknown solver error"}
+                ))
+                
+        return LegacySequentialResponse(
+            success=True,
+            stage_results=stage_results,
+            results={"analysis_summary": {"status": "Complete"}}
+        )
+
     except Exception as e:
-        print(f"Error during analysis: {e}")
         import traceback
         traceback.print_exc()
+        return LegacySequentialResponse(
+            success=False,
+            stage_results=[],
+            error=str(e)
+        )
 
 if __name__ == "__main__":
-    main() 
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
