@@ -38,7 +38,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False, # Changed to False to allow wildcard origins in browsers
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -51,10 +51,12 @@ async def root():
 async def create_mesh(request: MeshRequest):
     """
     Generate a 2D triangular mesh based on provided polygons and settings.
+    Runs in a thread pool to avoid blocking the event loop.
     """
     print(f"Received mesh generation request with {len(request.polygons)} polygons")
     try:
-        response = generate_mesh(request)
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, generate_mesh, request)
         if not response.success:
              return response
         return response

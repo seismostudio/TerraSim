@@ -30,4 +30,5 @@ ENV PYTHONPATH=/app
 EXPOSE 8010
 
 # Command to run the application (now from /app/backend)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010"]
+# Using multiple workers to handle concurrent requests from multiple tabs
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "4"]
