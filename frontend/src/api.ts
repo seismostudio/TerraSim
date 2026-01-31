@@ -1,6 +1,6 @@
 import { MeshRequest, MeshResponse, SolverRequest } from './types';
 
-const API_BASE_URL = import.meta.env.API_BASE_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.API_BASE_URL || 'http://localhost:8010/api';
 
 export const api = {
     generateMesh: async (request: MeshRequest): Promise<MeshResponse> => {
