@@ -17,12 +17,17 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the backend files into /app/backend
-# This ensures that 'import backend.xxx' works because we run from /app
+# This ensures that 'from backend.xxx' works because we add /app to PYTHONPATH
 COPY . ./backend/
 
-# Expose the port FastAPI will run on
-EXPOSE 8000
+# Move to the backend directory
+WORKDIR /app/backend
 
-# Command to run the application
-# We use 'backend.main:app' and run from /app
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Add /app to PYTHONPATH so 'backend' package is found
+ENV PYTHONPATH=/app
+
+# Expose the port FastAPI will run on
+EXPOSE 8010
+
+# Command to run the application (now from /app/backend)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010"]

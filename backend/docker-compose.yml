@@ -6,11 +6,12 @@ services:
     ports:
       - "8010:8010"
     volumes:
-      - .:/app
+      - .:/app/backend
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
     restart: always
 
 networks:
-  default:
-    name: dahar-network
+  dahar-network:
+    external: true
