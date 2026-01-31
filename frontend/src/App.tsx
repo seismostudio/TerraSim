@@ -12,8 +12,11 @@ import { api } from './api';
 import { MeshResponse, SolverResponse, PhaseRequest, Material, PolygonData, PointLoad, GeneralSettings, SolverSettings, MeshSettings, StepPoint } from './types';
 import { MaterialModal } from './component/MaterialModal';
 import { SettingsModal } from './component/SettingsModal';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthModal } from './component/AuthModal';
 
-function App() {
+function MainApp() {
+    const { isValid, incrementRunningCount } = useAuth();
     // 1. Wizard State
     const [activeTab, setActiveTab] = useState<WizardTab>(WizardTab.INPUT);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -79,6 +82,9 @@ function App() {
         }
 
         setIsRunningAnalysis(true);
+        // Track the analysis run in PocketBase
+        incrementRunningCount();
+
         const controller = new AbortController();
         setAbortController(controller);
 
@@ -241,6 +247,7 @@ function App() {
 
     return (
         <div className="flex flex-col h-screen overflow-hidden bg-slate-900 text-slate-100 selection:bg-blue-500/30">
+            {!isValid && <AuthModal />}
             <WizardHeader
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
@@ -401,8 +408,21 @@ function App() {
                     onClose={() => setIsSettingsModalOpen(false)}
                 />
             )}
+
+            <div className="fixed bottom-3 right-3 z-[100] items-center justify-center flex flex-col bg-slate-900/90 backdrop-blur-md p-2 rounded-xl border border-slate-700 shadow-2xl text-slate-400 z-[20]">
+                <div className="text-[10px]">Copyright © 2026 | Dahar Engineer</div>
+                <div className="text-[10px] border-b border-slate-700 w-full text-center">All rights reserved.</div>
+                <div className="text-[10px]">This software is still under development.</div>
+                <div className="text-[10px]">Please use it at your own risk.</div>
+            </div>
         </div>
     );
 }
 
-export default App;
+export default function App() {
+    return (
+        <AuthProvider>
+            <MainApp />
+        </AuthProvider>
+    );
+}

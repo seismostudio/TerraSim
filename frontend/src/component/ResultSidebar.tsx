@@ -72,46 +72,46 @@ const PhaseChart = ({ points, isLive = false, isSafety = false }: { points: Step
                         </button>
                     </div>
                     {isExpanded && (
-                        
-            <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={points} margin={{ top: 5, right: 10, bottom: 2, left: -20 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" />
-                        <XAxis
-                            dataKey="max_disp"
-                            type="number"
-                            domain={['auto', 'auto']}
-                            fontSize={8}
-                            stroke="#ffffff"
-                            tickFormatter={(v) => typeof v === 'number' ? v.toPrecision(2) : v}
-                            label={{ value: 'Disp (m)', position: 'insideBottom', offset: 5, fontSize: 8, fill: '#ffffff' }}
-                        />
-                        <YAxis
-                            dataKey="m_stage"
-                            domain={[0, 'auto']}
-                            fontSize={8}
-                            stroke="#ffffff"
-                            label={{ value: isSafety ? 'Σ Msf' : 'Mstage', angle: -90, position: 'insideLeft', offset: 25, fontSize: 8, fill: '#ffffff' }}
-                        />
-                        <Tooltip
-                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '9px' }}
-                            itemStyle={{ color: isLive ? '#60a5fa' : '#4ade80' }}
-                            labelStyle={{ color: '#94a3b8' }}
-                            formatter={(value: any) => [typeof value === 'number' ? value.toPrecision(4) : value, 'Value']}
-                            labelFormatter={(value: any) => `Disp: ${typeof value === 'number' ? value.toPrecision(4) : value} m`}
-                        />
-                        <Line
-                            type="monotone"
-                            dataKey="m_stage"
-                            stroke={isLive ? "#3b82f6" : "#22c55e"}
-                            strokeWidth={2}
-                            dot={{ r: 2, fill: isLive ? "#3b82f6" : "#22c55e", strokeWidth: 0 }}
-                            activeDot={{ r: 4, stroke: '#fff', strokeWidth: 1 }}
-                            isAnimationActive={false}
-                        />
-                    </LineChart>
-                </ResponsiveContainer>
-            </div>
+
+                        <div className="h-40 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={points} margin={{ top: 5, right: 10, bottom: 2, left: -20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" />
+                                    <XAxis
+                                        dataKey="max_disp"
+                                        type="number"
+                                        domain={['auto', 'auto']}
+                                        fontSize={8}
+                                        stroke="#ffffff"
+                                        tickFormatter={(v) => typeof v === 'number' ? v.toPrecision(2) : v}
+                                        label={{ value: 'Disp (m)', position: 'insideBottom', offset: 5, fontSize: 8, fill: '#ffffff' }}
+                                    />
+                                    <YAxis
+                                        dataKey="m_stage"
+                                        domain={[0, 'auto']}
+                                        fontSize={8}
+                                        stroke="#ffffff"
+                                        label={{ value: isSafety ? 'Σ Msf' : 'Mstage', angle: -90, position: 'insideLeft', offset: 25, fontSize: 8, fill: '#ffffff' }}
+                                    />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '9px' }}
+                                        itemStyle={{ color: isLive ? '#60a5fa' : '#4ade80' }}
+                                        labelStyle={{ color: '#94a3b8' }}
+                                        formatter={(value: any) => [typeof value === 'number' ? value.toPrecision(4) : value, 'Value']}
+                                        labelFormatter={(value: any) => `Disp: ${typeof value === 'number' ? value.toPrecision(4) : value} m`}
+                                    />
+                                    <Line
+                                        type="monotone"
+                                        dataKey="m_stage"
+                                        stroke={isLive ? "#3b82f6" : "#22c55e"}
+                                        strokeWidth={2}
+                                        dot={{ r: 2, fill: isLive ? "#3b82f6" : "#22c55e", strokeWidth: 0 }}
+                                        activeDot={{ r: 4, stroke: '#fff', strokeWidth: 1 }}
+                                        isAnimationActive={false}
+                                    />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
                     )}
                 </>
             )}
@@ -304,9 +304,6 @@ export const ResultSidebar: React.FC<ResultSidebarProps> = ({
 
                 {!solverResult && !isRunning && (
                     <div className="h-full flex flex-col items-center justify-center text-center p-2 space-y-2">
-                        <div className="w-12 h-12 bg-slate-800 rounded-2xl flex items-center justify-center text-slate-600">
-                            <CircleMinus className="w-6 h-6 text-slate-600" />
-                        </div>
                         <p className="text-xs text-slate-500 leading-relaxed">No analysis data available. Click "Run Analysis" to start the analysis.</p>
                     </div>
                 )}

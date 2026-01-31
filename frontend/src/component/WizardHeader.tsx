@@ -1,5 +1,5 @@
-import React from 'react';
-import { Settings, Folder, Square, ArrowDownToDot, Pen, ChartNoAxesColumnIncreasing, ChartNoAxesColumnDecreasing } from 'lucide-react';
+import { Settings, Folder, Square, ArrowDownToDot, Pen, ChartNoAxesColumnIncreasing, ChartNoAxesColumnDecreasing, LogOut } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export enum WizardTab {
     INPUT = 'INPUT',
@@ -23,6 +23,7 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
     onDrawModeChange,
     onOpenSettings
 }) => {
+    const { user, logout } = useAuth();
     const tabs = [
         { id: WizardTab.INPUT, label: 'Input' },
         { id: WizardTab.MESH, label: 'Mesh' },
@@ -36,18 +37,38 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
                 <div className="flex items-center gap-2">
                     <img src="/Logo.png" alt="Logo" className="w-10 h-10" />
                     <div className="flex flex-col gap-1">
-                        <h1 className="text-xl font-bold text-white tracking-tight leading-none">TerraSim</h1>
+                        <h1 className="text-xl font-bold text-white tracking-tight leading-none">TerraSim (Beta)</h1>
                         <p className="text-[11px] text-slate-500 font-semibold transition-colors">v 0.1.0 | Geotechnical FEA Software Analysis</p>
                     </div>
                 </div>
 
-                <button
-                    onClick={onOpenSettings}
-                    className="p-2.5 rounded-xl hover:bg-slate-700/50 transition-all text-slate-400 hover:text-blue-400 group relative active:scale-95"
-                    title="Global Settings"
-                >
-                    <Settings className="w-5 h-5 group-hover:rotate-45 transition-transform duration-300" />
-                </button>
+                <div className="flex items-center gap-2">
+                    {user && (
+                        <div className="flex items-center gap-3 px-3 py-1.5">
+                            <div className="flex flex-col items-end">
+                                <span className="text-[10px] font-semibold text-white leading-none">Welcome, {user.name}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <button
+                        onClick={onOpenSettings}
+                        className="p-2.5 rounded-xl hover:bg-slate-700/50 transition-all text-slate-400 hover:text-blue-400 group relative active:scale-95"
+                        title="Global Settings"
+                    >
+                        <Settings className="w-5 h-5 group-hover:rotate-45 transition-transform duration-300" />
+                    </button>
+
+                    {user && (
+                        <button
+                            onClick={logout}
+                            className="p-2.5 rounded-xl hover:bg-red-500/10 transition-all text-slate-400 hover:text-red-400 group relative active:scale-95"
+                            title="Logout"
+                        >
+                            <LogOut className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+                        </button>
+                    )}
+                </div>
             </header>
             <div className="flex gap-2 mt-2 pl-2">
                 {tabs.map(tab => {
@@ -72,28 +93,28 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
                             onClick={() => onDrawModeChange(drawMode === 'polygon' ? null : 'polygon')}
                             className={`cursor-pointer w-10 relative  py-2 px-2 text-sm transition-all border-b-2 h-full ${drawMode === 'polygon' ? 'text-blue-500 border-blue-500 font-bold rounded-t-lg bg-blue-600/20' : 'text-slate-400 border-transparent hover:text-slate-300'}`}
                         >
-                            <Folder/>
-                            <Pen className='absolute top-1 right-1 w-4 h-4'/>
+                            <Folder />
+                            <Pen className='absolute top-1 right-1 w-4 h-4' />
                         </button>
                         <button
                             onClick={() => onDrawModeChange(drawMode === 'rectangle' ? null : 'rectangle')}
                             className={`cursor-pointer w-10 relative py-2 px-2 text-sm transition-all border-b-2 h-full ${drawMode === 'rectangle' ? 'text-blue-500 border-blue-500 font-bold rounded-t-lg bg-blue-600/20' : 'text-slate-400 border-transparent hover:text-slate-300'}`}
                         >
-                            <Square/>
-                            <Pen className='absolute top-1 right-1 w-4 h-4'/>
+                            <Square />
+                            <Pen className='absolute top-1 right-1 w-4 h-4' />
                         </button>
                         <button
                             onClick={() => onDrawModeChange(drawMode === 'point_load' ? null : 'point_load')}
                             className={`cursor-pointer w-10 relative py-2 px-2 text-sm transition-all border-b-2 h-full ${drawMode === 'point_load' ? 'text-blue-500 border-blue-500 font-bold rounded-t-lg bg-blue-600/20' : 'text-slate-400 border-transparent hover:text-slate-300'}`}
                         >
-                            <ArrowDownToDot/>
+                            <ArrowDownToDot />
                         </button>
                         <button
                             onClick={() => onDrawModeChange(drawMode === 'water_level' ? null : 'water_level')}
                             className={`cursor-pointer w-10 relative py-2 px-2 text-sm transition-all border-b-2 h-full ${drawMode === 'water_level' ? 'text-blue-500 border-blue-500 font-bold rounded-t-lg bg-blue-600/20' : 'text-slate-400 border-transparent hover:text-slate-300'}`}
                         >
-                            <ChartNoAxesColumnIncreasing className='absolute bottom-2.5 left-1 w-5 h-5 -rotate-90'/>
-                            <ChartNoAxesColumnDecreasing className='absolute bottom-2.5 right-1 w-5 h-5 rotate-90'/>
+                            <ChartNoAxesColumnIncreasing className='absolute bottom-2.5 left-1 w-5 h-5 -rotate-90' />
+                            <ChartNoAxesColumnDecreasing className='absolute bottom-2.5 right-1 w-5 h-5 rotate-90' />
                         </button>
                     </div>
                 )}

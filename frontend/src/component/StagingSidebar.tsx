@@ -1,5 +1,5 @@
 import { PhaseRequest, PolygonData, PointLoad, PhaseType } from '../types';
-import { Trash, ShieldAlert } from 'lucide-react';
+import { Trash } from 'lucide-react';
 
 interface StagingSidebarProps {
     phases: PhaseRequest[];

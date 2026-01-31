@@ -71,7 +71,7 @@ const MeshResult = ({
 
         // Find active elements
         const activeElementIndices: number[] = [];
-        mesh.elements.forEach((e, i) => {
+        mesh.elements.forEach((_, i) => {
             const elemMaterial = mesh.element_materials[i];
             const isMeshActive = ignorePhases || (elemMaterial && (elemMaterial.polygon_id === undefined || activePolygons.has(elemMaterial.polygon_id)));
             if (isMeshActive) {
@@ -293,7 +293,7 @@ const MeshResult = ({
                     color="#d4d4d4"
                     wireframe={true}
                     transparent={true}
-                    opacity={0.8}
+                    opacity={0.5}
                     depthTest={true}
                     depthWrite={false}
                 />
@@ -361,14 +361,11 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
     showControls = true,
     ignorePhases = false
 }) => {
-    const [sliderValue, setSliderValue] = useState(200); // Default to roughly 1x if mapping 0-1000
+    const [sliderValue, setSliderValue] = useState(100);
     const [outputType, setOutputType] = useState<OutputType>(OutputType.DEFORMED_CONTOUR);
     const [range, setRange] = useState<{ min: number, max: number, label: React.ReactNode }>({ min: 0, max: 0, label: "" });
 
-    // Logarithmic mapping: Slider 0-1000 -> Scale 10^-1 (0.1) to 10^4 (10000)
-    const minLog = -1;
-    const maxLog = 4;
-    const scale = Math.pow(10, (sliderValue / 1000) * (maxLog - minLog) + minLog);
+    const scale = outputType === OutputType.DEFORMED_MESH ? sliderValue : 0;
 
     const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -406,40 +403,41 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
                             </select>
                         </div>
 
-                        <div>
-                            <div className="flex justify-between items-center mb-2">
-                                <label className="text-[10px] font-semibold text-slate-500 tracking-widest uppercase">Deformation Scale</label>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-mono bg-blue-500/10 px-1.5 py-0.5 rounded">
-                                        {scale < 10 ? scale.toFixed(2) : scale.toFixed(0)}x
-                                    </span>
-                                    <button
-                                        onClick={() => setSliderValue(200)}
-                                        className="text-[10px] text-slate-400 hover:text-white transition-colors"
-                                        title="Reset to 1x"
-                                    >
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                        </svg>
-                                    </button>
+                        {outputType === OutputType.DEFORMED_MESH && (
+                            <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="text-[10px] font-semibold text-slate-500 tracking-widest uppercase">Deformation Scale</label>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-mono bg-blue-500/10 px-1.5 py-0.5 rounded">
+                                            {scale < 10 ? scale.toFixed(2) : scale.toFixed(0)}x
+                                        </span>
+                                        <button
+                                            onClick={() => setSliderValue(10)}
+                                            className="text-[10px] text-slate-400 hover:text-white transition-colors"
+                                            title="Reset to 10x"
+                                        >
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    step="1"
+                                    value={sliderValue}
+                                    onChange={(e) => setSliderValue(Number(e.target.value))}
+                                    className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                />
+                                <div className="flex justify-between mt-1 px-0.5">
+                                    <span className="text-[8px]">1x</span>
+                                    <span className="text-[8px]">50x</span>
+                                    <span className="text-[8px]">100x</span>
                                 </div>
                             </div>
-                            <input
-                                type="range"
-                                min="0"
-                                max="1000"
-                                step="1"
-                                value={outputType === OutputType.DEFORMED_MESH ? sliderValue : 0}
-                                disabled={outputType !== OutputType.DEFORMED_MESH}
-                                onChange={(e) => setSliderValue(Number(e.target.value))}
-                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                            />
-                            <div className="flex justify-between mt-1 px-0.5">
-                                <span className="text-[8px]">0.1x</span>
-                                <span className="text-[8px]">2x</span>
-                                <span className="text-[8px]">32x</span>
-                            </div>
-                        </div>
+                        )}
                     </div>
 
                     {/* Log Panel */}
