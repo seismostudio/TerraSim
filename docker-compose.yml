@@ -1,0 +1,8 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8010:8010"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
