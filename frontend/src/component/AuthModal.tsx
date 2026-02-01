@@ -37,6 +37,7 @@ export const AuthModal: React.FC = () => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
             <div className="bg-slate-900 border border-slate-700 p-8 rounded-2xl shadow-2xl w-full max-w-md space-y-6">
                 <div className="text-center space-y-2">
+                    <img src="/Logo.png" alt="Logo" className="w-20 h-20 mx-auto" />
                     <h2 className="text-2xl font-bold text-white tracking-tight">Terra Sim</h2>
                     <p className="text-slate-400 text-sm">Please sign in to continue your analysis</p>
                 </div>
@@ -70,7 +71,7 @@ export const AuthModal: React.FC = () => {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50"
+                        className="cursor-pointer w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl shadow-blue-500/20 transition-all disabled:opacity-50"
                     >
                         {loading ? 'Processing...' : (isLogin ? 'Login' : 'Sign Up')}
                     </button>
@@ -83,7 +84,7 @@ export const AuthModal: React.FC = () => {
 
                 <button
                     onClick={loginWithGoogle}
-                    className="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-100 text-slate-900 font-semibold py-3 rounded-xl transition-all"
+                    className="cursor-pointer w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-100 text-slate-900 font-semibold py-3 rounded-xl transition-all"
                 >
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
                         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -97,7 +98,7 @@ export const AuthModal: React.FC = () => {
                 <div className="text-center">
                     <button
                         onClick={() => setIsLogin(!isLogin)}
-                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                        className="cursor-pointer text-xs text-blue-400 hover:text-blue-300 transition-colors"
                     >
                         {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Login"}
                     </button>

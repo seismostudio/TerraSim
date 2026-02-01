@@ -55,11 +55,12 @@ const MeshResult = ({
     onValueRangeChange: (min: number, max: number, label: React.ReactNode) => void,
     ignorePhases?: boolean
 }) => {
-    const { positions, indices, colors, rangeData } = useMemo(() => {
+    const { positions, colors, wireframePositions, rangeData } = useMemo(() => {
         if (!mesh) return {
             positions: new Float32Array(0),
             indices: new Uint32Array(0),
             colors: new Float32Array(0),
+            wireframePositions: new Float32Array(0),
             rangeData: { min: 0, max: 0, label: "" }
         };
 
@@ -105,151 +106,194 @@ const MeshResult = ({
         };
 
         if (isSolidMaterial) {
-            // Non-indexed geometry for solid fill
+            // 1 Triangle per element for solid materials (efficiency + clean edges)
             const pos = new Float32Array(activeElementIndices.length * 3 * 3);
             const col = new Float32Array(activeElementIndices.length * 3 * 3);
+            const wfPos = new Float32Array(activeElementIndices.length * 6 * 2 * 3); // 6 outer segments
 
             activeElementIndices.forEach((elemIdx, i) => {
                 const elem = mesh.elements[elemIdx];
                 const mat = mesh.element_materials[elemIdx]?.material;
                 const mColor = mat?.color ? new THREE.Color(mat.color) : new THREE.Color(0.23, 0.51, 0.96);
 
-                elem.forEach((nIdx, vIdx) => {
+                const [n1, n2, n3, n12, n23, n31] = elem;
+
+                // Fill: Use standard 3 corner nodes for a solid triangle
+                const triNodes = [n1, n2, n3];
+                triNodes.forEach((nIdx, vIdx) => {
                     const dPos = getDeformedPos(nIdx);
                     const baseIdx = (i * 3 + vIdx) * 3;
                     pos[baseIdx] = dPos[0];
                     pos[baseIdx + 1] = dPos[1];
                     pos[baseIdx + 2] = dPos[2];
-
                     col[baseIdx] = mColor.r;
                     col[baseIdx + 1] = mColor.g;
                     col[baseIdx + 2] = mColor.b;
                 });
+
+                // Wireframe: 6 outer segments forming the quadratic boundary (visualized linearly)
+                const wfEdges = [[n1, n12], [n12, n2], [n2, n23], [n23, n3], [n3, n31], [n31, n1]];
+                wfEdges.forEach((edge, eIdx) => {
+                    const p1 = getDeformedPos(edge[0]);
+                    const p2 = getDeformedPos(edge[1]);
+                    const baseIdx = (i * 6 + eIdx) * 6;
+                    wfPos[baseIdx] = p1[0]; wfPos[baseIdx + 1] = p1[1]; wfPos[baseIdx + 2] = p1[2];
+                    wfPos[baseIdx + 3] = p2[0]; wfPos[baseIdx + 4] = p2[1]; wfPos[baseIdx + 5] = p2[2];
+                });
             });
 
             return {
                 positions: pos,
-                indices: new Uint32Array(0), // No indices for non-indexed geometry
+                indices: new Uint32Array(0),
                 colors: col,
+                wireframePositions: wfPos,
                 rangeData: { min: 0, max: 0, label: "" }
             };
         } else {
-            // Indexed geometry for smooth contours
-            const nodeCount = mesh.nodes.length;
-            const pos = new Float32Array(nodeCount * 3);
-            const col = new Float32Array(nodeCount * 3);
-            const ind: number[] = [];
+            const polygonGroups = new Map<number, number[]>();
+            activeElementIndices.forEach(elemIdx => {
+                const mat = mesh.element_materials[elemIdx];
+                const polyId = mat?.polygon_id ?? -1;
+                if (!polygonGroups.has(polyId)) polygonGroups.set(polyId, []);
+                polygonGroups.get(polyId)!.push(elemIdx);
+            });
 
-            // Node Values Mapping (for Stress/Contour)
-            const nodeValues = new Float32Array(nodeCount).fill(0);
-            const nodeWeights = new Float32Array(nodeCount).fill(0);
+            const groupNodeValues = new Map<number, Map<number, number>>();
             let currentLabel: React.ReactNode = "";
 
-            if (outputType === OutputType.DEFORMED_CONTOUR) {
-                if (phaseResult) {
-                    phaseResult.displacements.forEach((d) => {
-                        const resetVisual = phaseRequest?.reset_displacements || false;
-                        const parentPhaseResult = currentPhaseIdx > 0 ? solverResult?.phases?.[currentPhaseIdx - 1] : null;
-                        let dx = d.ux;
-                        let dy = d.uy;
-                        if (resetVisual && parentPhaseResult) {
-                            const pd = parentPhaseResult.displacements.find(p => p.id === d.id);
-                            if (pd) { dx -= pd.ux; dy -= pd.uy; }
-                        }
-                        nodeValues[d.id - 1] = Math.sqrt(dx * dx + dy * dy);
-                    });
-                }
-                currentLabel = "Displacement (m)";
-            } else if (phaseResult && phaseResult.stresses.length > 0) {
-                phaseResult.stresses.forEach(s => {
-                    let val = 0;
-                    const elem = mesh.elements[s.element_id - 1];
-                    const pwp = s.pwp || 0;
+            const getStressValue = (s: any) => {
+                const p_steady = s.pwp_steady || 0;
+                const p_excess = s.pwp_excess || 0;
+                const p_total = s.pwp_total || 0;
+                if (outputType === OutputType.PWP_STEADY) return p_steady;
+                if (outputType === OutputType.PWP_EXCESS) return p_excess;
+                if (outputType === OutputType.PWP_TOTAL) return p_total;
+                const avg = (s.sig_xx + s.sig_yy) / 2;
+                const diff = (s.sig_xx - s.sig_yy) / 2;
+                const radius = Math.sqrt(diff * diff + s.sig_xy * s.sig_xy);
+                if (outputType === OutputType.SIGMA_1) return avg - radius; // major principal stress (use - for compression)
+                if (outputType === OutputType.SIGMA_3) return avg + radius; // minor principal stress (use + for tension)
+                const sxx_eff = s.sig_xx - p_total;
+                const syy_eff = s.sig_yy - p_total;
+                const avg_eff = (sxx_eff + syy_eff) / 2;
+                const diff_eff = (sxx_eff - syy_eff) / 2;
+                const r_eff = Math.sqrt(diff_eff * diff_eff + s.sig_xy * s.sig_xy);
+                if (outputType === OutputType.SIGMA_1_EFF) return avg_eff - r_eff; // major principal stress (use - for compression)
+                if (outputType === OutputType.SIGMA_3_EFF) return avg_eff + r_eff; // minor principal stress (use + for tension)
+                return 0;
+            };
 
-                    if (outputType === OutputType.PWP) {
-                        val = pwp;
-                        currentLabel = <span className="flex items-center gap-1">PWP Steady State <MathRender tex="(kN/m^2)" /></span>;
-                    } else if (outputType === OutputType.SIGMA_1 || outputType === OutputType.SIGMA_3) {
-                        const avg = (s.sig_xx + s.sig_yy) / 2;
-                        const diff = (s.sig_xx - s.sig_yy) / 2;
-                        const radius = Math.sqrt(diff * diff + s.sig_xy * s.sig_xy);
-                        val = outputType === OutputType.SIGMA_1 ? avg - radius : avg + radius;
-                        currentLabel = outputType === OutputType.SIGMA_1 ?
-                            <span className="flex items-center gap-1"><MathRender tex="\sigma_1" /> Principal Total Stress <MathRender tex="(kN/m^2)" /></span> :
-                            <span className="flex items-center gap-1"><MathRender tex="\sigma_3" /> Principal Total Stress <MathRender tex="(kN/m^2)" /></span>;
-                    } else if (outputType === OutputType.SIGMA_1_EFF || outputType === OutputType.SIGMA_3_EFF) {
-                        const sxx_eff = s.sig_xx - pwp;
-                        const syy_eff = s.sig_yy - pwp;
-                        const avg = (sxx_eff + syy_eff) / 2;
-                        const diff = (sxx_eff - syy_eff) / 2;
-                        const radius = Math.sqrt(diff * diff + s.sig_xy * s.sig_xy);
-                        val = outputType === OutputType.SIGMA_1_EFF ? avg - radius : avg + radius;
-                        currentLabel = outputType === OutputType.SIGMA_1_EFF ?
-                            <span className="flex items-center gap-1"><MathRender tex="\sigma'_1" /> Principal Effective Stress <MathRender tex="(kN/m^2)" /></span> :
-                            <span className="flex items-center gap-1"><MathRender tex="\sigma'_3" /> Principal Effective Stress <MathRender tex="(kN/m^2)" /></span>;
-                    } else if (outputType === OutputType.YIELD_STATUS) {
-                        val = s.is_yielded ? 1 : 0;
-                        currentLabel = "Yield Status";
-                    }
+            if (outputType === OutputType.PWP_STEADY) currentLabel = <span className="flex items-center gap-1">PWP Steady <MathRender tex="(kN/m^2)" /></span>;
+            else if (outputType === OutputType.PWP_EXCESS) currentLabel = <span className="flex items-center gap-1">PWP Excess <MathRender tex="(kN/m^2)" /></span>;
+            else if (outputType === OutputType.PWP_TOTAL) currentLabel = <span className="flex items-center gap-1">PWP Total <MathRender tex="(kN/m^2)" /></span>;
+            else if (outputType === OutputType.SIGMA_1) currentLabel = <span className="flex items-center gap-1"><MathRender tex="\sigma_1" /> <MathRender tex="(kN/m^2)" /></span>;
+            else if (outputType === OutputType.SIGMA_3) currentLabel = <span className="flex items-center gap-1"><MathRender tex="\sigma_3" /> <MathRender tex="(kN/m^2)" /></span>;
+            else if (outputType === OutputType.SIGMA_1_EFF) currentLabel = <span className="flex items-center gap-1"><MathRender tex="\sigma'_1" /> <MathRender tex="(kN/m^2)" /></span>;
+            else if (outputType === OutputType.SIGMA_3_EFF) currentLabel = <span className="flex items-center gap-1"><MathRender tex="\sigma'_3" /> <MathRender tex="(kN/m^2)" /></span>;
 
-                    if (elem) {
+            const stressMap = new Map<number, any>();
+            phaseResult?.stresses.forEach(s => stressMap.set(s.element_id, s));
+            const dispMap = new Map<number, any>();
+            phaseResult?.displacements.forEach(d => dispMap.set(d.id, d));
+            const parentDispMap = new Map<number, any>();
+            const isReset = phaseRequest?.reset_displacements || false;
+            if (isReset && currentPhaseIdx > 0) {
+                solverResult?.phases?.[currentPhaseIdx - 1]?.displacements.forEach(d => parentDispMap.set(d.id, d));
+            }
+
+            polygonGroups.forEach((elemIndices, polyId) => {
+                const localValues = new Map<number, number>();
+                const localWeights = new Map<number, number>();
+                elemIndices.forEach(eIdx => {
+                    const elem = mesh.elements[eIdx];
+                    const s = stressMap.get(eIdx + 1);
+                    if (outputType === OutputType.DEFORMED_CONTOUR) {
                         elem.forEach(nIdx => {
-                            nodeValues[nIdx] += val;
-                            nodeWeights[nIdx] += 1;
+                            const d = dispMap.get(nIdx + 1);
+                            let val = 0;
+                            if (d) {
+                                let dx = d.ux; let dy = d.uy;
+                                if (isReset) {
+                                    const pd = parentDispMap.get(d.id);
+                                    if (pd) { dx -= pd.ux; dy -= pd.uy; }
+                                }
+                                val = Math.sqrt(dx * dx + dy * dy);
+                            }
+                            localValues.set(nIdx, (localValues.get(nIdx) || 0) + val);
+                            localWeights.set(nIdx, (localWeights.get(nIdx) || 0) + 1);
+                        });
+                        currentLabel = "Displacement (m)";
+                    } else if (s) {
+                        const val = outputType === OutputType.YIELD_STATUS ? (s.is_yielded ? 1 : 0) : getStressValue(s);
+                        if (outputType === OutputType.YIELD_STATUS) currentLabel = "Yield Status";
+                        elem.forEach(nIdx => {
+                            localValues.set(nIdx, (localValues.get(nIdx) || 0) + val);
+                            localWeights.set(nIdx, (localWeights.get(nIdx) || 0) + 1);
                         });
                     }
                 });
-
-                for (let i = 0; i < nodeCount; i++) {
-                    if (nodeWeights[i] > 0) nodeValues[i] /= nodeWeights[i];
-                }
-            }
-
-            // Ranges
-            const activeNodes = new Set<number>();
-            activeElementIndices.forEach(idx => {
-                mesh.elements[idx].forEach(nIdx => activeNodes.add(nIdx));
+                localWeights.forEach((w, nIdx) => {
+                    localValues.set(nIdx, (localValues.get(nIdx) || 0) / w);
+                });
+                groupNodeValues.set(polyId, localValues);
             });
 
             let min = Infinity, max = -Infinity;
-            activeNodes.forEach(nIdx => {
-                const v = nodeValues[nIdx];
-                if (v < min) min = v;
-                if (v > max) max = v;
+            groupNodeValues.forEach((map) => {
+                map.forEach((v) => {
+                    if (v < min) min = v;
+                    if (v > max) max = v;
+                });
             });
             if (min === Infinity) { min = 0; max = 0; }
             if (min === max) max = min + 1e-9;
 
-            // Build Buffer
-            for (let i = 0; i < nodeCount; i++) {
-                const dPos = getDeformedPos(i);
-                pos[i * 3] = dPos[0];
-                pos[i * 3 + 1] = dPos[1];
-                pos[i * 3 + 2] = dPos[2];
+            const pos = new Float32Array(activeElementIndices.length * 4 * 3 * 3);
+            const col = new Float32Array(activeElementIndices.length * 4 * 3 * 3);
+            const wfPos = new Float32Array(activeElementIndices.length * 6 * 2 * 3);
 
-                if (outputType === OutputType.YIELD_STATUS) {
-                    if (nodeValues[i] > 0.5) {
-                        col[i * 3] = 1.0; col[i * 3 + 1] = 0.2; col[i * 3 + 2] = 0.2;
-                    } else {
-                        col[i * 3] = 0.2; col[i * 3 + 1] = 0.8; col[i * 3 + 2] = 0.2;
-                    }
-                } else {
-                    const normalized = (nodeValues[i] - min) / (max - min);
-                    const isStressOrPwp = outputType !== OutputType.DEFORMED_CONTOUR;
-                    const [r, g, b] = isStressOrPwp ? getStressColor(normalized) : getJetColor(normalized);
-                    col[i * 3] = r; col[i * 3 + 1] = g; col[i * 3 + 2] = b;
-                }
-            }
+            let vPtr = 0;
+            let activeElemInOrderIdx = 0;
+            polygonGroups.forEach((elemIndices, polyId) => {
+                const localVals = groupNodeValues.get(polyId)!;
+                elemIndices.forEach(eIdx => {
+                    const elem = mesh.elements[eIdx];
+                    const [n1, n2, n3, n12, n23, n31] = elem;
 
-            activeElementIndices.forEach(idx => {
-                const e = mesh.elements[idx];
-                ind.push(e[0], e[1], e[2]);
+                    const tris = [[n1, n12, n31], [n12, n2, n23], [n23, n3, n31], [n12, n23, n31]];
+                    tris.forEach(triNodes => {
+                        triNodes.forEach(nIdx => {
+                            const dPos = getDeformedPos(nIdx);
+                            pos[vPtr * 3] = dPos[0]; pos[vPtr * 3 + 1] = dPos[1]; pos[vPtr * 3 + 2] = dPos[2];
+                            const val = localVals.get(nIdx) || 0;
+                            if (outputType === OutputType.YIELD_STATUS) {
+                                if (val > 0.5) { col[vPtr * 3] = 1.0; col[vPtr * 3 + 1] = 0.2; col[vPtr * 3 + 2] = 0.2; }
+                                else { col[vPtr * 3] = 0.2; col[vPtr * 3 + 1] = 0.8; col[vPtr * 3 + 2] = 0.2; }
+                            } else {
+                                const norm = (val - min) / (max - min);
+                                const rgb = outputType === OutputType.DEFORMED_CONTOUR ? getJetColor(norm) : getStressColor(norm);
+                                col[vPtr * 3] = rgb[0]; col[vPtr * 3 + 1] = rgb[1]; col[vPtr * 3 + 2] = rgb[2];
+                            }
+                            vPtr++;
+                        });
+                    });
+
+                    const wfEdges = [[n1, n12], [n12, n2], [n2, n23], [n23, n3], [n3, n31], [n31, n1]];
+                    wfEdges.forEach((edge, eInWfIdx) => {
+                        const p1 = getDeformedPos(edge[0]); const p2 = getDeformedPos(edge[1]);
+                        const baseIdx = (activeElemInOrderIdx * 6 + eInWfIdx) * 6;
+                        wfPos[baseIdx] = p1[0]; wfPos[baseIdx + 1] = p1[1]; wfPos[baseIdx + 2] = p1[2];
+                        wfPos[baseIdx + 3] = p2[0]; wfPos[baseIdx + 4] = p2[1]; wfPos[baseIdx + 5] = p2[2];
+                    });
+                    activeElemInOrderIdx++;
+                });
             });
 
             return {
                 positions: pos,
-                indices: new Uint32Array(ind),
+                indices: new Uint32Array(0),
                 colors: col,
+                wireframePositions: wfPos,
                 rangeData: { min, max, label: currentLabel }
             };
         }
@@ -264,40 +308,29 @@ const MeshResult = ({
 
     return (
         <group>
-            {/* Solid Mesh (Colors/Contours) */}
-            <mesh key={`solid-m-${currentPhaseIdx}-${outputType}-${mesh.nodes.length}-${mesh.elements.length}`}>
-                <bufferGeometry key={`solid-g-${currentPhaseIdx}-${outputType}-${mesh.nodes.length}-${mesh.elements.length}`}>
+            <mesh key={`solid-m-${currentPhaseIdx}-${outputType}`}>
+                <bufferGeometry>
                     <bufferAttribute attach="attributes-position" args={[positions, 3]} />
                     <bufferAttribute attach="attributes-color" args={[colors, 3]} />
-                    {indices.length > 0 && <bufferAttribute attach="index" args={[indices, 1]} />}
                 </bufferGeometry>
                 <meshBasicMaterial
                     vertexColors={true}
-                    color={"white"}
-                    opacity={0.7}
                     transparent
+                    opacity={0.7}
                     side={THREE.DoubleSide}
                     polygonOffset
                     polygonOffsetFactor={1}
-                    polygonOffsetUnits={1}
                 />
             </mesh>
 
-            {/* Wireframe Mesh (Lines) */}
-            <mesh key={`wire-m-${currentPhaseIdx}-${outputType}-${mesh.nodes.length}-${mesh.elements.length}`}>
-                <bufferGeometry key={`wire-g-${currentPhaseIdx}-${outputType}-${mesh.nodes.length}-${mesh.elements.length}`}>
-                    <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-                    {indices.length > 0 && <bufferAttribute attach="index" args={[indices, 1]} />}
-                </bufferGeometry>
-                <meshBasicMaterial
-                    color="#d4d4d4"
-                    wireframe={true}
-                    transparent={true}
-                    opacity={0.5}
-                    depthTest={true}
-                    depthWrite={false}
-                />
-            </mesh>
+            {wireframePositions && (
+                <lineSegments key={`wire-m-${currentPhaseIdx}-${outputType}`}>
+                    <bufferGeometry>
+                        <bufferAttribute attach="attributes-position" args={[wireframePositions, 3]} />
+                    </bufferGeometry>
+                    <lineBasicMaterial color="#d4d4d4" transparent opacity={0.2} />
+                </lineSegments>
+            )}
         </group>
     );
 };
@@ -364,6 +397,8 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
     const [sliderValue, setSliderValue] = useState(100);
     const [outputType, setOutputType] = useState<OutputType>(OutputType.DEFORMED_CONTOUR);
     const [range, setRange] = useState<{ min: number, max: number, label: React.ReactNode }>({ min: 0, max: 0, label: "" });
+    const [showNodes, setShowNodes] = useState(false);
+    const [showGaussPoints, setShowGaussPoints] = useState(false);
 
     const scale = outputType === OutputType.DEFORMED_MESH ? sliderValue : 0;
 
@@ -382,7 +417,7 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
     return (
         <div className="w-full h-full bg-slate-900 absolute inset-0 overflow-hidden">
             {showControls && (
-                <div className="absolute top-4 left-4 z-20 w-64 flex flex-col gap-4 max-h-[calc(100vh-32px)]">
+                <div className="absolute top-4 left-10 z-20 w-64 flex flex-col gap-4 max-h-[calc(100vh-32px)]">
                     {/* Control Panel */}
                     <div className="bg-slate-900/90 backdrop-blur-md p-5 rounded-xl border border-slate-700 shadow-2xl space-y-4 shrink-0">
                         <div>
@@ -398,7 +433,9 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
                                 <option value={OutputType.SIGMA_3}>Sigma 3 Minor Total</option>
                                 <option value={OutputType.SIGMA_1_EFF}>Sigma 1 Major Eff</option>
                                 <option value={OutputType.SIGMA_3_EFF}>Sigma 3 Minor Eff</option>
-                                <option value={OutputType.PWP}>Pore Water Pressure</option>
+                                <option value={OutputType.PWP_STEADY}>PWP Steady (Static)</option>
+                                <option value={OutputType.PWP_EXCESS}>PWP Excess (Loading)</option>
+                                <option value={OutputType.PWP_TOTAL}>PWP Total</option>
                                 <option value={OutputType.YIELD_STATUS}>Yield Points</option>
                             </select>
                         </div>
@@ -438,6 +475,32 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
                                 </div>
                             </div>
                         )}
+
+                        {/* Point Display Toggles */}
+                        <div className="space-y-2 pt-2 border-t border-slate-700">
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    checked={showNodes}
+                                    onChange={(e) => setShowNodes(e.target.checked)}
+                                    className="w-3 h-3 accent-blue-500 cursor-pointer"
+                                />
+                                <span className="text-[10px] font-semibold text-slate-500 group-hover:text-slate-300 transition-colors tracking-widest">
+                                    Show Nodes
+                                </span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    checked={showGaussPoints}
+                                    onChange={(e) => setShowGaussPoints(e.target.checked)}
+                                    className="w-3 h-3 accent-blue-500 cursor-pointer"
+                                />
+                                <span className="text-[10px] font-semibold text-slate-500 group-hover:text-slate-300 transition-colors tracking-widest">
+                                    Show Gauss Points
+                                </span>
+                            </label>
+                        </div>
                     </div>
 
                     {/* Log Panel */}
@@ -495,6 +558,73 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
                             onValueRangeChange={handleRangeChange}
                             ignorePhases={ignorePhases}
                         />
+
+                        {/* Render Nodes if enabled */}
+                        {showNodes && outputType !== OutputType.DEFORMED_MESH && (
+                            <>
+                                {mesh.nodes.map((node, i) => (
+                                    <mesh key={`node-${i}`} position={[node[0], node[1], 0.1]}>
+                                        <circleGeometry args={[0.02, 16]} />
+                                        <meshBasicMaterial color="#ffffff" />
+                                    </mesh>
+                                ))}
+                            </>
+                        )}
+
+                        {/* Render Gauss Points if enabled */}
+                        {showGaussPoints && outputType !== OutputType.DEFORMED_MESH && (
+                            <>
+                                {mesh.elements.map((elem, elemIdx) => {
+                                    // 6-node element: [n1, n2, n3, n4, n5, n6]
+                                    // n4 is mid 1-2, n5 is mid 2-3, n6 is mid 3-1
+                                    const nodes = elem.map(idx => mesh.nodes[idx]);
+
+                                    // Find stress results for this element
+                                    // Optimization: This search is O(N_results), could be slow for huge info. 
+                                    // Better to assume sorted or use map. For now simple find.
+                                    const phaseRes = solverResult?.phases[currentPhaseIdx];
+                                    if (!phaseRes) return null;
+
+                                    // 3-point Gauss quadrature (Natural coords)
+                                    const gaussPoints = [
+                                        { xi: 1 / 6, eta: 1 / 6, id: 1 },
+                                        { xi: 2 / 3, eta: 1 / 6, id: 2 },
+                                        { xi: 1 / 6, eta: 2 / 3, id: 3 }
+                                    ];
+
+                                    return gaussPoints.map((gp, gpIdx) => {
+                                        const { xi, eta } = gp;
+                                        const zeta = 1 - xi - eta;
+
+                                        // T6 Shape Functions
+                                        const N1 = zeta * (2 * zeta - 1);
+                                        const N2 = xi * (2 * xi - 1);
+                                        const N3 = eta * (2 * eta - 1);
+                                        const N4 = 4 * zeta * xi;
+                                        const N5 = 4 * xi * eta;
+                                        const N6 = 4 * eta * zeta;
+
+                                        const N = [N1, N2, N3, N4, N5, N6];
+
+                                        let x = 0, y = 0;
+                                        for (let i = 0; i < 6; i++) {
+                                            if (nodes[i]) {
+                                                x += N[i] * nodes[i][0];
+                                                y += N[i] * nodes[i][1];
+                                            }
+                                        }
+                                        let color = "#ffffff"; // Default green
+
+                                        return (
+                                            <mesh key={`gauss-${elemIdx}-${gpIdx}`} position={[x, y, 0.1]}>
+                                                <circleGeometry args={[0.02, 8]} />
+                                                <meshBasicMaterial color={color} />
+                                            </mesh>
+                                        );
+                                    });
+                                })}
+                            </>
+                        )}
                     </>
                 )}
             </Canvas>

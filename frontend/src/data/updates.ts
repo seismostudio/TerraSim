@@ -1,0 +1,42 @@
+export interface SoftwareUpdate {
+    version: string;
+    date: string;
+    changes: string[];
+}
+
+export const SOFTWARE_UPDATES: SoftwareUpdate[] = [
+    {
+        version: "v 0.2.1",
+        date: "2026-02-01",
+        changes: [
+            "Improved solver performance and calculation time",
+            "Updated calculation method from CST to T6 with 3 integration points for better accuracy",
+            "Fixed issue with mesh generation for",
+            "add excess pore water pressure to the solver",
+            "bug fixes",
+            "add line load",
+            "save and load projects directly from cloud",
+            "add cloud save and load projects",
+        ]
+    },
+    {
+        version: "v 0.1.0",
+        date: "2026-01-31",
+        changes: [
+            "Initial Beta Release",
+            "Geotechnical FEA Solver integration",
+            "Import DXF support",
+            "Added Mesh and Staging workflows",
+            "Advanced result visualization"
+        ]
+    },
+    {
+        version: "v 0.0.9",
+        date: "2026-01-15",
+        changes: [
+            "Internal testing phase",
+            "Bug fixes in solver core",
+            "UI improvements for Input panel"
+        ]
+    }
+];

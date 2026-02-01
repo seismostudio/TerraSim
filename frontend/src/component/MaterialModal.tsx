@@ -63,6 +63,9 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({ material, onSave, 
                                 >
                                     <option value={MaterialModel.LINEAR_ELASTIC}>Linear Elastic</option>
                                     <option value={MaterialModel.MOHR_COULOMB}>Mohr Coulomb</option>
+                                    <option disabled title="Under development">Hardening Soil</option>
+                                    <option disabled title="Under development">Soft Soil</option>
+                                    <option disabled title="Under development">Modified Cam Clay</option>
                                 </select>
                             </div>
 
@@ -219,13 +222,13 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({ material, onSave, 
                                     />
                                 </div>
                             )}
-                        </div>                
+                        </div>
                     </div>
                 </div>
 
                 <div className="flex justify-end gap-3 mt-10 p-4 -m-8 bg-slate-800/50 rounded-b-xl border-t border-slate-800">
-                    <button onClick={onClose} className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors">Cancel</button>
-                    <button onClick={() => onSave(edited)} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded shadow-lg shadow-blue-500/20 transition-all">Save Changes</button>
+                    <button onClick={onClose} className="cursor-pointer px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors">Cancel</button>
+                    <button onClick={() => onSave(edited)} className="cursor-pointer px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded shadow-lg shadow-blue-500/20 transition-all">Save Changes</button>
                 </div>
             </div>
         </div>

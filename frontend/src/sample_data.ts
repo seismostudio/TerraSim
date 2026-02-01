@@ -66,46 +66,46 @@ export const SAMPLE_MATERIALS = [
 
 // Sample Geometry (Polygons)
 // export const SAMPLE_POLYGONS = [
-//     // Bottom Layer (Sand)
-//     {
-//         vertices: [
-//             { x: -25, y: -10 },
-//             { x: 25, y: -10 },
-//             { x: 25, y: 0 },
-//             { x: -25, y: 0 },
-//         ],
-//         materialId: 'mat_sand',
-//     },
-//     // Top Layer (Clay)
-//     {
-//         vertices: [
-//             { x: -25, y: 0 },
-//             { x: 25, y: 0 },
-//             { x: 25, y: 10 },
-//             { x: -25, y: 10 },
-//         ],
-//         materialId: 'mat_undrained_c_clay',
-//     },
-//     // Top Layer (Clay)
-//     {
-//         vertices: [
-//             { x: -3, y: 10 },
-//             { x: 25, y: 10 },
-//             { x: 25, y: 15 },
-//             { x: 0, y: 15 },
-//         ],
-//         materialId: 'mat_undrained_a_clay',
-//     },
-//     // Top Layer (Clay)
-//     {
-//         vertices: [
-//             { x: -25, y: 10 },
-//             { x: -3, y: 10 },
-//             { x: 0, y: 15 },
-//             { x: -25, y: 15 },
-//         ],
-//         materialId: 'mat_undrained_a_clay',
-//     },
+// Bottom Layer (Sand)
+// {
+//     vertices: [
+//         { x: -25, y: -10 },
+//         { x: 25, y: -10 },
+//         { x: 25, y: 0 },
+//         { x: -25, y: 0 },
+//     ],
+//     materialId: 'mat_sand',
+// },
+// // Top Layer (Clay)
+// {
+//     vertices: [
+//         { x: -25, y: 0 },
+//         { x: 25, y: 0 },
+//         { x: 25, y: 10 },
+//         { x: -25, y: 10 },
+//     ],
+//     materialId: 'mat_undrained_c_clay',
+// },
+// // Top Layer (Clay)
+// {
+//     vertices: [
+//         { x: -5, y: 10 },
+//         { x: 25, y: 10 },
+//         { x: 25, y: 15 },
+//         { x: 0, y: 15 },
+//     ],
+//     materialId: 'mat_undrained_b_clay',
+// },
+// // Top Layer (Clay)
+// {
+//     vertices: [
+//         { x: -25, y: 10 },
+//         { x: -5, y: 10 },
+//         { x: 0, y: 15 },
+//         { x: -25, y: 15 },
+//     ],
+//     materialId: 'mat_undrained_a_clay',
+// },
 // ];
 
 
@@ -155,7 +155,7 @@ export const SAMPLE_POLYGONS = [
         vertices: [
             { x: -10, y: 2.4 },
             { x: -0.2, y: 2.4 },
-            { x: -0.2, y: 3.0},
+            { x: -0.2, y: 3.0 },
             { x: -10, y: 3.0 },
         ],
         materialId: 'mat_undrained_a_clay',
@@ -165,8 +165,8 @@ export const SAMPLE_POLYGONS = [
         vertices: [
             { x: 10, y: 2.4 },
             { x: 0.2, y: 2.4 },
-            { x: 0.2, y: 3.0},
-            { x: 10, y: 3.0},
+            { x: 0.2, y: 3.0 },
+            { x: 10, y: 3.0 },
         ],
         materialId: 'mat_undrained_a_clay',
     },
@@ -175,7 +175,7 @@ export const SAMPLE_POLYGONS = [
         vertices: [
             { x: -10, y: 3.0 },
             { x: -0.2, y: 3.0 },
-            { x: -0.2, y: 3.5},
+            { x: -0.2, y: 3.5 },
             { x: -10, y: 3.5 },
         ],
         materialId: 'mat_undrained_a_clay',
@@ -184,8 +184,8 @@ export const SAMPLE_POLYGONS = [
         vertices: [
             { x: 10, y: 3.0 },
             { x: 0.2, y: 3.0 },
-            { x: 0.2, y: 3.5},
-            { x: 10, y: 3.5},
+            { x: 0.2, y: 3.5 },
+            { x: 10, y: 3.5 },
         ],
         materialId: 'mat_undrained_a_clay',
     },
@@ -194,10 +194,10 @@ export const SAMPLE_POLYGONS = [
         vertices: [
             { x: -1, y: 2 },
             { x: -1, y: 2.4 },
-            { x: -0.2, y: 2.4},
-            { x: -0.2, y: 3.5},
+            { x: -0.2, y: 2.4 },
+            { x: -0.2, y: 3.5 },
             { x: 0.2, y: 3.5 },
-            { x: 0.2, y: 2.4},
+            { x: 0.2, y: 2.4 },
             { x: 1, y: 2.4 },
             { x: 1, y: 2 },
         ],
@@ -226,6 +226,11 @@ export const SAMPLE_MESH_REQUEST: MeshRequest = {
     polygons: SAMPLE_POLYGONS,
     materials: SAMPLE_MATERIALS,
     pointLoads: SAMPLE_POINT_LOADS,
+    // water_level: [
+    //     { x: -25, y: 3 },
+    //     { x: 0, y: 5 },
+    //     { x: 25, y: 10 },
+    // ],
     water_level: [
         { x: -10, y: 2 },
         { x: 10, y: 2 }
@@ -233,51 +238,43 @@ export const SAMPLE_MESH_REQUEST: MeshRequest = {
     mesh_settings: SAMPLE_MESH_SETTINGS
 };
 
+// Sample Phases for Embankment Model
 // export const SAMPLE_PHASES: PhaseRequest[] = [
-//     {
-//         id: 'phase_0',
-//         name: 'Initial (K0 Procedure)',
-//         phase_type: PhaseType.K0_PROCEDURE,
-//         active_polygon_indices: [0, 1], // Bottom soil and structures
-//         active_load_ids: [],
-//         reset_displacements: false
-//     },
-//     {
-//         id: 'phase_1',
-//         name: 'Embankment',
-//         phase_type: PhaseType.PLASTIC,
-//         parent_id: 'phase_0',
-//         active_polygon_indices: [0, 1, 2, 3], // Add another layer
-//         active_load_ids: [],
-//         reset_displacements: true
-//     },
-//     {
-//         id: 'phase_2',
-//         name: 'Point Load',
-//         phase_type: PhaseType.PLASTIC,
-//         parent_id: 'phase_1',
-//         active_polygon_indices: [0, 1, 2, 3],
-//         active_load_ids: ['load_1'], // Assuming some load ID exists
-//         reset_displacements: false
-//     },
-//     {
-//         id: 'phase_3',
-//         name: 'Cut',
-//         phase_type: PhaseType.PLASTIC,
-//         parent_id: 'phase_2',
-//         active_polygon_indices: [0, 1, 2],
-//         active_load_ids: ['load_1'], // Assuming some load ID exists
-//         reset_displacements: false
-//     },
-//     {
-//         id: 'phase_4',
-//         name: 'SF',
-//         phase_type: PhaseType.SAFETY_ANALYSIS,
-//         parent_id: 'phase_3',
-//         active_polygon_indices: [0, 1, 2],
-//         active_load_ids: ['load_1'], // Assuming some load ID exists
-//         reset_displacements: false
-//     }
+// {
+//     id: 'phase_0',
+//     name: 'Initial (K0 Procedure)',
+//     phase_type: PhaseType.K0_PROCEDURE,
+//     active_polygon_indices: [0, 1], // Bottom soil and structures
+//     active_load_ids: [],
+//     reset_displacements: false
+// },
+// {
+//     id: 'phase_1',
+//     name: 'Embankment',
+//     phase_type: PhaseType.PLASTIC,
+//     parent_id: 'phase_0',
+//     active_polygon_indices: [0, 1, 2, 3], // Add another layer
+//     active_load_ids: [],
+//     reset_displacements: true
+// },
+// {
+//     id: 'phase_2',
+//     name: 'Cut',
+//     phase_type: PhaseType.PLASTIC,
+//     parent_id: 'phase_1',
+//     active_polygon_indices: [0, 1, 2],
+//     active_load_ids: [], // Assuming some load ID exists
+//     reset_displacements: false
+// },
+// {
+//     id: 'phase_3',
+//     name: 'SF',
+//     phase_type: PhaseType.SAFETY_ANALYSIS,
+//     parent_id: 'phase_2',
+//     active_polygon_indices: [0, 1, 2],
+//     active_load_ids: [], // Assuming some load ID exists
+//     reset_displacements: false
+// }
 // ];
 
 
@@ -346,13 +343,14 @@ export const SAMPLE_PHASES: PhaseRequest[] = [
         reset_displacements: false
     }
 ];
+
 // Sample Solver Settings
 export const SAMPLE_SOLVER_SETTINGS: SolverSettings = {
     max_iterations: 60,
     min_desired_iterations: 3,
     max_desired_iterations: 15,
     initial_step_size: 0.05,
-    tolerance: 0.1,
+    tolerance: 0.01,
     max_load_fraction: 0.5,
     max_steps: 100,
 };
@@ -360,5 +358,5 @@ export const SAMPLE_SOLVER_SETTINGS: SolverSettings = {
 // General Settings
 export const SAMPLE_GENERAL_SETTINGS = {
     snapToGrid: true,
-    snapSpacing: 1.0,
+    snapSpacing: 0.5,
 };

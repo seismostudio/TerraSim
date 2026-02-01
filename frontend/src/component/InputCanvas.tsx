@@ -3,11 +3,12 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { OrthographicCamera, OrbitControls, Grid, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { Ruler } from './Ruler';
-import { PolygonData, PointLoad, Material, GeneralSettings } from '../types';
+import { PolygonData, PointLoad, Material, GeneralSettings, LineLoad } from '../types';
 
 interface InputCanvasProps {
     polygons: PolygonData[];
     pointLoads: PointLoad[];
+    lineLoads: LineLoad[];
     materials: Material[];
     water_level?: { x: number, y: number }[];
     activePolygonIndices?: number[];
@@ -15,6 +16,7 @@ interface InputCanvasProps {
     drawMode: string | null;
     onAddPolygon: (vertices: { x: number, y: number }[]) => void;
     onAddPointLoad: (x: number, y: number) => void;
+    onAddLineLoad: (x1: number, y1: number, x2: number, y2: number) => void;
     onAddWaterLevel: (vertices: { x: number, y: number }[]) => void;
     onCancelDraw: () => void;
     selectedEntity: { type: string, id: string | number } | null;
@@ -121,21 +123,67 @@ const LoadMarker = ({ load, isSelected, isActive, onSelect, onContextMenu }: {
                 <coneGeometry args={[0.25, headLen, 4]} />
                 <meshBasicMaterial color={color} />
             </mesh>
-            {/* Invisible larger click area */}
-            <mesh position={origin.clone().sub(dir.clone().multiplyScalar(length / 2))} rotation={[0, 0, angle - Math.PI / 2]}>
-                <boxGeometry args={[0.6, length, 0.1]} />
-                <meshBasicMaterial transparent opacity={0} />
-            </mesh>
         </group>
     );
 };
 
+const LineLoadMarker = ({ load, isSelected, isActive, onSelect, onContextMenu }: {
+    load: LineLoad,
+    isSelected: boolean,
+    isActive: boolean,
+    onSelect: () => void,
+    onContextMenu: (x: number, y: number) => void
+}) => {
+    const dir = new THREE.Vector3(load.fx, load.fy, 0);
+    const forceMagnitude = dir.length();
+    if (forceMagnitude === 0) return null;
+
+    const normalizedDir = dir.clone().normalize();
+    const angle = Math.atan2(normalizedDir.y, normalizedDir.x);
+    const color = isSelected ? "#60a5fa" : (isActive ? "#ef4444" : "#475569");
+
+    const p1 = new THREE.Vector3(load.x1, load.y1 + 0.2, 0.1);
+    const p2 = new THREE.Vector3(load.x2, load.y2 + 0.2, 0.1);
+    const l1 = new THREE.Vector3(load.x1, load.y1, 0.1);
+    const l2 = new THREE.Vector3(load.x2, load.y2, 0.1);
+    const length = p1.distanceTo(p2);
+    const numArrows = Math.max(3, Math.floor(length / 2.0));
+
+    const arrows = [];
+    for (let i = 0; i < numArrows; i++) {
+        const t = i / (numArrows - 1);
+        const origin = p1.clone().lerp(p2, t);
+        const shaftStart = origin.clone().sub(normalizedDir.clone().multiplyScalar(1.5));
+        arrows.push({ origin, shaftStart });
+    }
+
+    return (
+        <group
+            onClick={(e) => { e.stopPropagation(); onSelect(); }}
+            onContextMenu={(e) => { e.nativeEvent.preventDefault(); e.stopPropagation(); onContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY); }}
+        >
+            <Line points={[l1, l2]} color={color} lineWidth={2} />
+            {arrows.map((arrow, idx) => (
+                <group key={idx}>
+                    <Line points={[arrow.shaftStart, arrow.origin]} color={color} lineWidth={2} />
+                    <mesh position={arrow.origin} rotation={[0, 0, angle - Math.PI / 2]}>
+                        <coneGeometry args={[0.15, 0.4, 4]} />
+                        <meshBasicMaterial color={color} />
+                    </mesh>
+                </group>
+            ))}
+        </group>
+    );
+};
+
+
 // --- DRAWING MANAGER ---
-const DrawingManager = ({ mode, onAddPolygon, onAddPointLoad, onAddWaterLevel, onCancel, generalSettings }: {
+const DrawingManager = ({ mode, onAddPolygon, onAddPointLoad, onAddLineLoad, onAddWaterLevel, onCancel, generalSettings }: {
     mode: string | null;
     onAddPolygon: (pts: { x: number, y: number }[]) => void;
     onAddPointLoad: (x: number, y: number) => void;
-    onAddWaterLevel: (pts: { x: number, y: number }[]) => void;
+    onAddLineLoad: (x1: number, y1: number, x2: number, y2: number) => void;
+    onAddWaterLevel: (vertices: { x: number, y: number }[]) => void;
     onCancel: () => void;
     generalSettings: GeneralSettings;
 }) => {
@@ -190,6 +238,14 @@ const DrawingManager = ({ mode, onAddPolygon, onAddPointLoad, onAddWaterLevel, o
                     onAddPolygon(vertices);
                     setTempPoints([]);
                 }
+            } else if (mode === 'line_load') {
+                if (tempPoints.length === 0) {
+                    setTempPoints([pos]);
+                } else {
+                    const p1 = tempPoints[0];
+                    onAddLineLoad(p1.x, p1.y, pos.x, pos.y);
+                    setTempPoints([]);
+                }
             } else {
                 setTempPoints(prev => [...prev, pos]);
             }
@@ -233,7 +289,9 @@ const DrawingManager = ({ mode, onAddPolygon, onAddPointLoad, onAddWaterLevel, o
             linePoints.push(new THREE.Vector3(previewPoint.x, previewPoint.y, 0.4));
             linePoints.push(new THREE.Vector3(p1.x, previewPoint.y, 0.4));
             linePoints.push(new THREE.Vector3(p1.x, p1.y, 0.4));
-        } else {
+        } else if (mode === 'line_load' && tempPoints.length === 1) {
+            linePoints.push(previewPoint);
+        } else if (mode !== 'rectangle' && mode !== 'line_load') {
             linePoints.push(previewPoint);
         }
     }
@@ -260,9 +318,9 @@ const DrawingManager = ({ mode, onAddPolygon, onAddPointLoad, onAddWaterLevel, o
 };
 
 export const InputCanvas: React.FC<InputCanvasProps> = ({
-    polygons, pointLoads, materials, water_level,
+    polygons, pointLoads, lineLoads, materials, water_level,
     activePolygonIndices, activeLoadIds,
-    drawMode, onAddPolygon, onAddPointLoad, onAddWaterLevel, onCancelDraw,
+    drawMode, onAddPolygon, onAddPointLoad, onAddLineLoad, onAddWaterLevel, onCancelDraw,
     selectedEntity, onSelectEntity, onDeletePolygon, onDeleteLoad, onDeleteWaterPoint, onToggleActive,
     generalSettings
 }) => {
@@ -320,7 +378,7 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
                         <Line
                             points={water_level.map(p => new THREE.Vector3(p.x, p.y, 0.4))}
                             color="cyan"
-                            lineWidth={2}
+                            lineWidth={3}
                         />
                         {water_level.map((p, i) => (
                             <mesh
@@ -328,7 +386,7 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
                                 position={[p.x, p.y, 0.45]}
                                 onClick={(e) => { e.stopPropagation(); onSelectEntity({ type: 'water_level', id: i }); }}
                             >
-                                <circleGeometry args={[selectedEntity?.type === 'water_level' && selectedEntity.id === i ? 0.3 : 0.15, 16]} />
+                                <circleGeometry args={[selectedEntity?.type === 'water_level' && selectedEntity.id === i ? 0.3 : 0.05, 16]} />
                                 <meshBasicMaterial color={selectedEntity?.type === 'water_level' && selectedEntity.id === i ? "#3b82f6" : "cyan"} />
                             </mesh>
                         ))}
@@ -366,10 +424,26 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
                     );
                 })}
 
+                {lineLoads && lineLoads.map((load) => {
+                    const isSelected = selectedEntity?.type === 'load' && selectedEntity.id === load.id;
+                    const isActive = activeLoadIds ? activeLoadIds.includes(load.id) : true;
+                    return (
+                        <LineLoadMarker
+                            key={load.id}
+                            load={load}
+                            isSelected={isSelected}
+                            isActive={isActive}
+                            onSelect={() => onSelectEntity({ type: 'load', id: load.id })}
+                            onContextMenu={(x, y) => handleContextMenu(x, y, { type: 'load', id: load.id })}
+                        />
+                    );
+                })}
+
                 <DrawingManager
                     mode={drawMode}
                     onAddPolygon={onAddPolygon}
                     onAddPointLoad={onAddPointLoad}
+                    onAddLineLoad={onAddLineLoad}
                     onAddWaterLevel={onAddWaterLevel}
                     onCancel={onCancelDraw}
                     generalSettings={generalSettings}

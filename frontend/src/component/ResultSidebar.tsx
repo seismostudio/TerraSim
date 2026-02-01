@@ -67,7 +67,7 @@ const PhaseChart = ({ points, isLive = false, isSafety = false }: { points: Step
                 <>
                     <div className="w-full relative text-xs font-semibold py-2 tracking-widest text-center">
                         {isSafety ? 'Msf' : 'Mstage'} vs. Disp.
-                        <button onClick={() => setIsExpanded(!isExpanded)} className="absolute right-2 text-slate-500 hover:text-white transition-colors">
+                        <button onClick={() => setIsExpanded(!isExpanded)} className="cursor-pointer absolute right-2 text-slate-500 hover:text-white transition-colors">
                             <ChevronDown size={12} className={`transition ${isExpanded ? 'rotate-180' : ''}`} />
                         </button>
                     </div>
@@ -123,81 +123,66 @@ const PhaseChart = ({ points, isLive = false, isSafety = false }: { points: Step
 const ResultSummary = ({ phaseResult }: { phaseResult: any }) => {
     if (!phaseResult) return null;
 
-    const dispMags = phaseResult.displacements.map((d: any) => Math.sqrt(d.ux * d.ux + d.uy * d.uy));
-    const maxDisp = Math.max(...dispMags);
-    const minDisp = Math.min(...dispMags);
+    const summary = React.useMemo(() => {
+        const dispMags = phaseResult.displacements.map((d: any) => Math.hypot(d.ux, d.uy));
 
-    const stresses = phaseResult.stresses.map((s: any) => {
-        const avg = (s.sig_xx + s.sig_yy) / 2;
-        const diff = (s.sig_xx - s.sig_yy) / 2;
-        const radius = Math.sqrt(diff * diff + s.sig_xy * s.sig_xy);
+        const stresses = phaseResult.stresses.map((s: any) => {
+            const avg = (s.sig_xx + s.sig_yy) / 2;
+            const diff = (s.sig_xx - s.sig_yy) / 2;
+            const radius = Math.hypot(diff, s.sig_xy);
+            const s1 = avg - radius;
+            const s3 = avg + radius;
+            const pwp = s.pwp_total || 0;
+            return { s1, s3, s1e: s1 - pwp, s3e: s3 - pwp, pwp, yielded: s.is_yielded };
+        });
 
-        // Geotechnical Convention: Sigma 1 is Major (Most Compressive/Negative), Sigma 3 is Minor (Least Compressive/Negative)
-        const s1 = avg - radius;
-        const s3 = avg + radius;
+        const getExtrema = (arr: number[]) => ({ min: Math.min(...arr), max: Math.max(...arr) });
 
-        const pwp = s.pwp || 0;
-        const s1e = s1 - pwp;
-        const s3e = s3 - pwp;
+        return {
+            disp: getExtrema(dispMags),
+            s1: getExtrema(stresses.map((s: any) => s.s1)),
+            s3: getExtrema(stresses.map((s: any) => s.s3)),
+            s1e: getExtrema(stresses.map((s: any) => s.s1e)),
+            s3e: getExtrema(stresses.map((s: any) => s.s3e)),
+            pwp: getExtrema(stresses.map((s: any) => s.pwp)),
+            yieldCount: stresses.filter((s: any) => s.yielded).length
+        };
+    }, [phaseResult]);
 
-        return { s1, s3, s1e, s3e, pwp, yielded: s.is_yielded };
-    });
-
-    const metrics = {
-        maxS1: Math.max(...stresses.map((s: any) => s.s1)),
-        minS1: Math.min(...stresses.map((s: any) => s.s1)),
-        maxS3: Math.max(...stresses.map((s: any) => s.s3)),
-        minS3: Math.min(...stresses.map((s: any) => s.s3)),
-        maxS1e: Math.max(...stresses.map((s: any) => s.s1e)),
-        minS1e: Math.min(...stresses.map((s: any) => s.s1e)),
-        maxS3e: Math.max(...stresses.map((s: any) => s.s3e)),
-        minS3e: Math.min(...stresses.map((s: any) => s.s3e)),
-        maxPWP: Math.max(...stresses.map((s: any) => s.pwp)),
-        minPWP: Math.min(...stresses.map((s: any) => s.pwp)),
-        yieldCount: stresses.filter((s: any) => s.yielded).length
-    };
-
-    const Row = ({ label, min, max, unit = "kN/m²" }: any) => (
-        <div className="py-2 border-b border-slate-700">
-            <div className="text-[10px] text-slate-300 font-semibold mb-1 tracking-widest">{label} </div>
-            <div className="flex justify-between items-end">
-                <div className="flex flex-col">
-                    <span className="text-[9px] text-slate-500">Min</span>
-                    <span className="text-xs font-mono text-rose-400">{min.toPrecision(4)} {unit}</span>
-                </div>
-                <div className="flex flex-col text-right">
-                    <span className="text-[9px] text-slate-500">Max</span>
-                    <span className="text-xs font-mono text-emerald-400">{max.toPrecision(4)} {unit}</span>
-                </div>
+    const CompactRow = ({ label, values, unit = "kN/m²" }: { label: string, values: { min: number, max: number }, unit?: string }) => (
+        <div className="group flex justify-between items-center py-1.5 border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors px-1 rounded">
+            <span className="text-[10px] text-slate-400 font-medium">{label}</span>
+            <div className="flex items-center gap-2 text-[10px] font-mono">
+                <span className="text-rose-400/80">{values.min.toPrecision(3)}</span>
+                <span className="text-slate-600">/</span>
+                <span className="text-emerald-400/80">{values.max.toPrecision(3)}</span>
+                <span className="text-[9px] text-slate-500 ml-1 w-8 text-right underline decoration-slate-700">{unit}</span>
             </div>
         </div>
     );
 
     return (
-        <div className="space-y-1">
+        <div className="p-1 space-y-0.5 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {!phaseResult.success && (
-                <div className="mb-4 p-3 bg-rose-500/20 border border-rose-500/50 rounded-xl">
-                    <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[11px] font-semibold text-rose-200 tracking-widest">Phase Failed</span>
-                    </div>
-                    <p className="text-[10px] text-rose-300 leading-relaxed italic">
-                        Failed at step {phaseResult.step_failed_at} with mStage {phaseResult.reached_m_stage?.toFixed(3)}.
-                        Showing last converged state.
-                    </p>
+                <div className="mb-2 p-2 bg-rose-500/10 border-l-2 border-rose-500 flex items-center gap-2">
+                    <span className="text-[9px] font-bold text-rose-500 uppercase">Failed</span>
+                    <span className="text-[9px] text-rose-300 italic truncate">
+                        Step {phaseResult.step_failed_at} (mS: {phaseResult.reached_m_stage?.toFixed(2)})
+                    </span>
                 </div>
             )}
 
-            <Row label="Displacement" min={minDisp} max={maxDisp} unit="m" />
-            <Row label="Sigma 1 Major (Total)" min={metrics.minS1} max={metrics.maxS1} />
-            <Row label="Sigma 3 Minor (Total)" min={metrics.minS3} max={metrics.maxS3} />
-            <Row label="Sigma 1 Major (Effective)" min={metrics.minS1e} max={metrics.maxS1e} />
-            <Row label="Sigma 3 Minor (Effective)" min={metrics.minS3e} max={metrics.maxS3e} />
-            <Row label="Pore Water Pressure" min={metrics.minPWP} max={metrics.maxPWP} />
+            <CompactRow label="Displacement" values={summary.disp} unit="m" />
+            <CompactRow label="σ1 Total" values={summary.s1} />
+            <CompactRow label="σ3 Total" values={summary.s3} />
+            <CompactRow label="σ'1 Eff." values={summary.s1e} />
+            <CompactRow label="σ'3 Eff." values={summary.s3e} />
+            <CompactRow label="Total PWP" values={summary.pwp} />
 
-            <div className={`mt-2 p-4 rounded-xl border ${metrics.yieldCount > 0 ? 'bg-rose-500/10 border-rose-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}>
-                <div className={`text-sm font-semibold flex items-baseline gap-2 ${metrics.yieldCount > 0 ? 'text-rose-500' : 'text-blue-500'}`}>
-                    {metrics.yieldCount}
-                    <span className="text-xs font-normal text-slate-400 truncate">points yielded</span>
+            <div className="mt-2 pt-2 flex items-center justify-between border-t border-slate-800">
+                <span className="text-[10px] text-slate-500 tracking-tighter">Yield Status</span>
+                <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${summary.yieldCount > 0 ? 'bg-rose-500/20 text-rose-500' : 'bg-emerald-500/20 text-emerald-500'}`}>
+                    {summary.yieldCount} <span className="font-normal opacity-70">points</span>
                 </div>
             </div>
         </div>

@@ -63,6 +63,16 @@ export interface PointLoad {
     node?: number; // Backend assigned node index (0-based usually, check MeshResponse)
 }
 
+export interface LineLoad {
+    id: string;
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    fx: number;
+    fy: number;
+}
+
 export interface MeshSettings {
     mesh_size: number;
     boundary_refinement_factor: number;
@@ -72,8 +82,33 @@ export interface MeshRequest {
     polygons: PolygonData[];
     materials: Material[];
     pointLoads: PointLoad[];
+    lineLoads?: LineLoad[];
     water_level?: Point[];
     mesh_settings?: MeshSettings; // NEW: Global mesh settings
+}
+
+// --- Project Management ---
+export interface ProjectMetadata {
+    lastEdited: string; // ISO Date string
+    authorName?: string;
+    authorEmail?: string;
+}
+
+export interface ProjectFile {
+    version: string;
+    projectName: string;
+    metadata: ProjectMetadata;
+    materials: Material[];
+    polygons: PolygonData[];
+    pointLoads: PointLoad[];
+    lineLoads: LineLoad[];
+    waterLevel: { x: number, y: number }[];
+    phases: PhaseRequest[];
+    generalSettings: GeneralSettings;
+    solverSettings: SolverSettings;
+    meshSettings: MeshSettings;
+    meshResponse: MeshResponse | null;
+    solverResponse: SolverResponse | null;
 }
 
 export interface BoundaryCondition {
@@ -90,6 +125,12 @@ export interface PointLoadAssignment {
     assigned_node_id: number; // 0-based index
 }
 
+export interface LineLoadAssignment {
+    line_load_id: string;
+    element_id: number;
+    edge_nodes: number[]; // 1-based node IDs
+}
+
 export interface ElementMaterial {
     element_id: number; // 1-based index (check backend usage, usually elements are 0-based in array but IDs might be 1-based)
     material: Material;
@@ -99,9 +140,10 @@ export interface ElementMaterial {
 export interface MeshResponse {
     success: boolean;
     nodes: [number, number][]; // [[x, y], ...]
-    elements: [number, number, number][]; // [[n1, n2, n3], ...] 0-based indices
+    elements: number[][]; // [[n1, n2, n3, n4, n5, n6], ...] 0-based indices, 6-node quadratic triangles
     boundary_conditions: BoundaryConditionsResponse;
     point_load_assignments: PointLoadAssignment[];
+    line_load_assignments: LineLoadAssignment[];
     element_materials: ElementMaterial[];
     error?: string;
 }
@@ -139,6 +181,7 @@ export interface SolverRequest {
     settings?: SolverSettings;
     water_level?: Point[];
     point_loads?: PointLoad[]; // Definitions
+    line_loads?: LineLoad[];
 }
 
 export interface NodeResult {
@@ -149,6 +192,7 @@ export interface NodeResult {
 
 export interface StressResult {
     element_id: number; // 1-based
+    gp_id?: number; // 1-based index for Gauss point
     sig_xx: number;
     sig_yy: number;
     sig_xy: number;
@@ -156,7 +200,9 @@ export interface StressResult {
     m_stage: number;
     is_yielded?: boolean;
     yield_function?: number;
-    pwp?: number; // NEW: Pore Water Pressure
+    pwp_steady?: number;
+    pwp_excess?: number;
+    pwp_total?: number;
 }
 
 export interface StepPoint {
@@ -191,7 +237,9 @@ export enum OutputType {
     SIGMA_1_EFF = "sigma_1_eff",
     SIGMA_3_EFF = "sigma_3_eff",
     YIELD_STATUS = "yield_status",
-    PWP = "pwp"
+    PWP_STEADY = "pwp_steady",
+    PWP_EXCESS = "pwp_excess",
+    PWP_TOTAL = "pwp_total"
 }
 
 export interface GeneralSettings {

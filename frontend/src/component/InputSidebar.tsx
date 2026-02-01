@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
-import { PolygonData, Material, PointLoad } from '../types';
+import { PolygonData, Material, PointLoad, LineLoad } from '../types';
 import { ChevronDown, Pencil, Trash } from 'lucide-react';
 import { MathRender } from './Math';
+import { useState } from 'react';
 
 interface InputSidebarProps {
     materials: Material[];
     polygons: PolygonData[];
     pointLoads: PointLoad[];
+    lineLoads: LineLoad[];
     waterLevel: { x: number; y: number }[];
     onUpdateMaterials: (m: Material[]) => void;
     onUpdatePolygons: (p: PolygonData[]) => void;
     onUpdateLoads: (l: PointLoad[]) => void;
+    onUpdateLineLoads: (l: LineLoad[]) => void;
     onUpdateWater: (w: { x: number; y: number }[]) => void;
     onEditMaterial: (mat: Material) => void;
     onDeleteMaterial: (id: string) => void;
@@ -26,10 +28,12 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
     materials,
     polygons,
     pointLoads,
+    lineLoads,
     waterLevel,
     onUpdateMaterials,
     onUpdatePolygons,
     onUpdateLoads,
+    onUpdateLineLoads,
     onUpdateWater,
     onEditMaterial,
     onDeleteMaterial,
@@ -66,21 +70,6 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
         onUpdatePolygons(newPolys);
     };
 
-    // const handleAddPolygon = () => {
-    //     const newPoly: PolygonData = {
-    //         materialId: materials[0]?.id || 'mat_sand',
-    //         vertices: [
-    //             { x: 0, y: 0 },
-    //             { x: 5, y: 0 },
-    //             { x: 5, y: 5 },
-    //             { x: 0, y: 5 }
-    //         ],
-    //         mesh_size: 1.0,
-    //         boundary_refinement_factor: 1.0
-    //     };
-    //     onUpdatePolygons([...polygons, newPoly]);
-    // };
-
     const handleAddLoad = () => {
         const newLoad: PointLoad = {
             id: `load_${pointLoads.length + 1}`,
@@ -107,7 +96,20 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
     const [isMaterialOpen, setIsMaterialOpen] = useState(true);
     const [isPolygonOpen, setIsPolygonOpen] = useState(true);
     const [isLoadOpen, setIsLoadOpen] = useState(true);
+    const [isLineLoadOpen, setIsLineLoadOpen] = useState(true);
     const [isWaterOpen, setIsWaterOpen] = useState(true);
+
+    const handleAddLineLoad = () => {
+        const newLoad: LineLoad = {
+            id: `line_load_${lineLoads.length + 1}`,
+            x1: 0, y1: 10,
+            x2: 10, y2: 10,
+            fx: 0,
+            fy: -50
+        };
+        onUpdateLineLoads([...lineLoads, newLoad]);
+    };
+
 
     return (
         <div className="w-[350px] h-full overflow-y-auto bg-slate-900 border-r border-slate-700 custom-scrollbar">
@@ -155,12 +157,7 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
                             </div>
                         </div>
                     ))}
-                    <button
-                        onClick={handleAddMaterial}
-                        className="add-button"
-                    >
-                        + Add Material
-                    </button>
+                    <button onClick={handleAddMaterial} className="add-button">+ Add Material</button>
                 </div>
             )}
 
@@ -200,12 +197,6 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
                             </div>
                         </div>
                     ))}
-                    {/* <button
-                        onClick={handleAddPolygon}
-                        className="add-button"
-                    >
-                        + Add Polygon
-                    </button> */}
                 </div>
             )}
 
@@ -219,12 +210,8 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
             {isWaterOpen && (
                 <div className="p-2 space-y-2">
                     <div className="flex px-2 justify-between items-center w-full text-xs">
-                        <div className="w-1/2">
-                            X <MathRender tex="(m)" />
-                        </div>
-                        <div className="w-1/2">
-                            Y <MathRender tex="(m)" />
-                        </div>
+                        <div className="w-1/2">X <MathRender tex="(m)" /></div>
+                        <div className="w-1/2">Y <MathRender tex="(m)" /></div>
                     </div>
                     {waterLevel.map((p, i) => (
                         <div
@@ -246,26 +233,14 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
                                     className="flex-1 bg-slate-900 border border-slate-700 text-slate-100 text-[11px] p-1 rounded outline-none focus:border-blue-500"
                                 />
                             </div>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); onDeleteWaterPoint(i); }}
-                                className="cursor-pointer p-1.5 text-slate-500 hover:text-rose-500 transition-colors"
-                            >
+                            <button onClick={(e) => { e.stopPropagation(); onDeleteWaterPoint(i); }} className="cursor-pointer p-1.5 text-slate-500 hover:text-rose-500 transition-colors">
                                 <Trash className="w-3.5 h-3.5" />
                             </button>
                         </div>
                     ))}
                     <div className="flex gap-2">
-                        <button
-                            onClick={() => onUpdateWater([...waterLevel, { x: 0, y: 0 }])}
-                            className="add-button"
-                        >
-                            + Add Water Point
-                        </button>
-                        <button
-                            onClick={onDeleteWaterLevel}
-                            className="cursor-pointer p-1.5 text-rose-400 hover:text-rose-300 transition-colors"
-                            title="Delete All Water Points"
-                        >
+                        <button onClick={() => onUpdateWater([...waterLevel, { x: 0, y: 0 }])} className="add-button">+ Add Water Point</button>
+                        <button onClick={onDeleteWaterLevel} className="cursor-pointer p-1.5 text-rose-400 hover:text-rose-300 transition-colors" title="Delete All Water Points">
                             <Trash className="w-3.5 h-3.5" />
                         </button>
                     </div>
@@ -289,10 +264,7 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
                         >
                             <div className="flex justify-between items-center">
                                 <span className="itemlabel">{load.id}</span>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); onDeleteLoad(load.id); }}
-                                    className="cursor-pointer p-1.5 text-slate-500 hover:text-rose-500 transition-colors"
-                                >
+                                <button onClick={(e) => { e.stopPropagation(); onDeleteLoad(load.id); }} className="cursor-pointer p-1.5 text-slate-500 hover:text-rose-500 transition-colors">
                                     <Trash className="w-3.5 h-3.5" />
                                 </button>
                             </div>
@@ -352,14 +324,115 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
                             </div>
                         </div>
                     ))}
-                    <button
-                        onClick={handleAddLoad}
-                        className="add-button"
-                    >
-                        + Add Load
-                    </button>
+                    <button onClick={handleAddLoad} className="add-button">+ Add Load</button>
+                </div>
+            )}
+
+            <div className="dropdownlabel">Line Loads
+                <button
+                    onClick={() => { setIsLineLoadOpen(!isLineLoadOpen) }}
+                    className="cursor-pointer p-1.5 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 hover:text-white transition-colors">
+                    <ChevronDown className={`w-4 h-4 transition ${isLineLoadOpen ? "rotate-180" : ""}`} />
+                </button>
+            </div>
+            {isLineLoadOpen && (
+                <div className="p-4 space-y-2">
+                    {lineLoads.map((load, i) => (
+                        <div
+                            key={load.id}
+                            onClick={() => onSelectEntity({ type: 'load', id: load.id })}
+                            className={`flex flex-col gap-1 p-2 bg-slate-800 rounded border transition-all cursor-pointer ${selectedEntity?.type === 'load' && selectedEntity.id === load.id ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-slate-700'}`}
+                        >
+                            <div className="flex justify-between items-center">
+                                <span className="itemlabel">{load.id}</span>
+                                <button onClick={(e) => { e.stopPropagation(); onDeleteLoad(load.id); }} className="cursor-pointer p-1.5 text-slate-500 hover:text-rose-500 transition-colors">
+                                    <Trash className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="flex flex-col gap-1 text-[10px]">
+                                    <span className="sublabel text-slate-400">P1 (X, Y)</span>
+                                    <div className="flex gap-1">
+                                        <input
+                                            type="number"
+                                            value={load.x1}
+                                            onChange={(e) => {
+                                                const next = [...lineLoads];
+                                                next[i] = { ...next[i], x1: Number(e.target.value) };
+                                                onUpdateLineLoads(next);
+                                            }}
+                                            className="w-full bg-slate-900 border border-slate-700 text-slate-100 px-1 py-0.5 rounded outline-none focus:border-blue-500"
+                                        />
+                                        <input
+                                            type="number"
+                                            value={load.y1}
+                                            onChange={(e) => {
+                                                const next = [...lineLoads];
+                                                next[i] = { ...next[i], y1: Number(e.target.value) };
+                                                onUpdateLineLoads(next);
+                                            }}
+                                            className="w-full bg-slate-900 border border-slate-700 text-slate-100 px-1 py-0.5 rounded outline-none focus:border-blue-500"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-1 text-[10px]">
+                                    <span className="sublabel text-slate-400">P2 (X, Y)</span>
+                                    <div className="flex gap-1">
+                                        <input
+                                            type="number"
+                                            value={load.x2}
+                                            onChange={(e) => {
+                                                const next = [...lineLoads];
+                                                next[i] = { ...next[i], x2: Number(e.target.value) };
+                                                onUpdateLineLoads(next);
+                                            }}
+                                            className="w-full bg-slate-900 border border-slate-700 text-slate-100 px-1 py-0.5 rounded outline-none focus:border-blue-500"
+                                        />
+                                        <input
+                                            type="number"
+                                            value={load.y2}
+                                            onChange={(e) => {
+                                                const next = [...lineLoads];
+                                                next[i] = { ...next[i], y2: Number(e.target.value) };
+                                                onUpdateLineLoads(next);
+                                            }}
+                                            className="w-full bg-slate-900 border border-slate-700 text-slate-100 px-1 py-0.5 rounded outline-none focus:border-blue-500"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <span className="sublabel">Force X <MathRender tex="(kN/m)" /></span>
+                                    <input
+                                        type="number"
+                                        value={load.fx}
+                                        onChange={(e) => {
+                                            const next = [...lineLoads];
+                                            next[i] = { ...next[i], fx: Number(e.target.value) };
+                                            onUpdateLineLoads(next);
+                                        }}
+                                        className="bg-slate-900 border border-slate-700 text-slate-100 text-[10px] px-2 py-1 rounded outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <span className="sublabel">Force Y <MathRender tex="(kN/m)" /></span>
+                                    <input
+                                        type="number"
+                                        value={load.fy}
+                                        onChange={(e) => {
+                                            const next = [...lineLoads];
+                                            next[i] = { ...next[i], fy: Number(e.target.value) };
+                                            onUpdateLineLoads(next);
+                                        }}
+                                        className="bg-slate-900 border border-slate-700 text-slate-100 text-[10px] px-2 py-1 rounded outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    <button onClick={handleAddLineLoad} className="add-button">+ Add Line Load</button>
                 </div>
             )}
         </div>
     );
 };
+

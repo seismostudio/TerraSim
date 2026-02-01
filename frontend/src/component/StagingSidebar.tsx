@@ -1,4 +1,4 @@
-import { PhaseRequest, PolygonData, PointLoad, PhaseType } from '../types';
+import { PhaseRequest, PolygonData, PointLoad, PhaseType, LineLoad } from '../types';
 import { Trash } from 'lucide-react';
 
 interface StagingSidebarProps {
@@ -6,6 +6,7 @@ interface StagingSidebarProps {
     currentPhaseIdx: number;
     polygons: PolygonData[];
     pointLoads: PointLoad[];
+    lineLoads: LineLoad[];
     onPhasesChange: (phases: PhaseRequest[]) => void;
     onSelectPhase: (idx: number) => void;
 }
@@ -15,6 +16,7 @@ export const StagingSidebar: React.FC<StagingSidebarProps> = ({
     currentPhaseIdx,
     polygons,
     pointLoads,
+    lineLoads,
     onPhasesChange,
     onSelectPhase
 }) => {
@@ -234,6 +236,23 @@ export const StagingSidebar: React.FC<StagingSidebarProps> = ({
                                     className="w-3 h-3 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-offset-slate-900"
                                 />
                                 <span>{load.id} <span className="opacity-50 text-[10px]">(@{load.x},{load.y})</span></span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                <div>
+                    <div className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest">LINE LOADS</div>
+                    <div className="space-y-2">
+                        {lineLoads.map((load) => (
+                            <label key={load.id} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-white transition-colors">
+                                <input
+                                    type="checkbox"
+                                    checked={currentPhase?.active_load_ids?.includes(load.id)}
+                                    onChange={() => toggleLoad(load.id)}
+                                    className="w-3 h-3 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-offset-slate-900"
+                                />
+                                <span>{load.id} <span className="opacity-50 text-[10px]">(@{load.x1},{load.y1} to @{load.x2},{load.y2})</span></span>
                             </label>
                         ))}
                     </div>
