@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 
 from backend.models import MeshRequest, MeshResponse, SolverRequest, SolverResponse, SolverSettings, MeshResponse, BoundaryConditionsResponse, BoundaryCondition, PointLoadAssignment, ElementMaterial, Material
 from backend.mesh_generator import generate_mesh
-from backend.fea_solver import solve_phases
+from backend.solver import solve_phases
 from backend.legacy_models import LegacySequentialRequest, LegacySequentialResponse, LegacyStageResult
 
 # Metadata

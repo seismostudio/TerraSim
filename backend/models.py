@@ -13,7 +13,7 @@ class PolygonData(BaseModel):
     materialId: str
 
 class MaterialModel(str, Enum):
-    """Material constitutive model types"""
+    # """Material constitutive model types"""
     LINEAR_ELASTIC = "linear_elastic"
     MOHR_COULOMB = "mohr_coulomb"
     # Future: HARDENING_SOIL, CAM_CLAY, etc.
@@ -26,7 +26,7 @@ class DrainageType(str, Enum):
     NON_POROUS = "non_porous"
 
 class PhaseType(str, Enum):
-    """Type of analysis phase"""
+    # """Type of analysis phase"""
     PLASTIC = "plastic"               # Standard elastoplastic deformation
     K0_PROCEDURE = "k0_procedure"     # Initial stress generation (no deformation)
     GRAVITY_LOADING = "gravity_loading" # Legacy deformation-based gravity (not recommended)
@@ -63,6 +63,15 @@ class PointLoad(BaseModel):
     fy: float
     node: Optional[int] = None
 
+class LineLoad(BaseModel):
+    id: str
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+    fx: float # (kN/m)
+    fy: float
+
 class MeshSettings(BaseModel):
     mesh_size: float = 2.0
     boundary_refinement_factor: float = 1.0
@@ -71,13 +80,13 @@ class MeshRequest(BaseModel):
     polygons: List[PolygonData]
     materials: List[Material]
     pointLoads: List[PointLoad]
+    lineLoads: Optional[List[LineLoad]] = []
     mesh_settings: Optional[MeshSettings] = MeshSettings()
     water_level: Optional[List[Point]] = None
 
 class BoundaryCondition(BaseModel):
     node: int  # 1-based index usually for FE, but typically backend sends 0-based for arrays. 
                # However, FE code: `bc.node + 1`. So backend sends 0-based.
-
 class BoundaryConditionsResponse(BaseModel):
     full_fixed: List[BoundaryCondition]
     normal_fixed: List[BoundaryCondition]
@@ -85,6 +94,11 @@ class BoundaryConditionsResponse(BaseModel):
 class PointLoadAssignment(BaseModel):
     point_load_id: str
     assigned_node_id: int # FE expects this to be ready-to-use ID (1-based).
+
+class LineLoadAssignment(BaseModel):
+    line_load_id: str
+    element_id: int 
+    edge_nodes: List[int] # 1-based node IDs [n1, n2, n3]
 
 class ElementMaterial(BaseModel):
     element_id: int # 1-based ID
@@ -95,9 +109,10 @@ class ElementMaterial(BaseModel):
 class MeshResponse(BaseModel):
     success: bool
     nodes: List[List[float]] # [[x, y], ...]
-    elements: List[List[int]] # [[n1, n2, n3], ...] 0-based
+    elements: List[List[int]] # [[n1, n2, n3, n4, n5, n6], ...] 0-based, 6-node quadratic triangles
     boundary_conditions: BoundaryConditionsResponse
     point_load_assignments: List[PointLoadAssignment]
+    line_load_assignments: List[LineLoadAssignment]
     element_materials: List[ElementMaterial]
     error: Optional[str] = None
 
@@ -125,7 +140,7 @@ class PhaseRequest(BaseModel):
     phase_type: Optional[PhaseType] = PhaseType.PLASTIC
     parent_id: Optional[str] = None # Continues from this phase
     active_polygon_indices: List[int] # Indices of polygons in original MeshRequest
-    active_load_ids: List[str] # IDs of point loads to activate
+    active_load_ids: List[str] # IDs of point/line loads to activate
     reset_displacements: bool = False # If true, reset total displacement visualization
 
 class SolverRequest(BaseModel):
@@ -134,6 +149,7 @@ class SolverRequest(BaseModel):
     settings: Optional[SolverSettings] = SolverSettings()
     water_level: Optional[List[Point]] = None
     point_loads: Optional[List[PointLoad]] = [] # Definitions of load vectors
+    line_loads: Optional[List[LineLoad]] = []
 
 class NodeResult(BaseModel):
     id: int # 1-based
@@ -142,6 +158,7 @@ class NodeResult(BaseModel):
 
 class StressResult(BaseModel):
     element_id: int # 1-based
+    gp_id: Optional[int] = 1
     sig_xx: float
     sig_yy: float
     sig_xy: float
@@ -149,7 +166,9 @@ class StressResult(BaseModel):
     m_stage: float
     is_yielded: Optional[bool] = False  # NEW: Plasticity flag
     yield_function: Optional[float] = None  # NEW: f value (f<0 elastic, f=0 yield surface)
-    pwp: Optional[float] = 0.0 # NEW: Pore Water Pressure
+    pwp_steady: Optional[float] = 0.0
+    pwp_excess: Optional[float] = 0.0
+    pwp_total: Optional[float] = 0.0
 
 class PhaseResult(BaseModel):
     phase_id: str

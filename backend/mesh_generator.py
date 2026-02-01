@@ -106,6 +106,13 @@ def generate_mesh(request: MeshRequest) -> MeshResponse:
             for pl in request.pointLoads:
                 get_vertex_index(pl.x, pl.y)
         
+        # --- NEW: Add Line Load Coordinates to Vertices and Segments ---
+        if request.lineLoads:
+            for ll in request.lineLoads:
+                v1 = get_vertex_index(ll.x1, ll.y1)
+                v2 = get_vertex_index(ll.x2, ll.y2)
+                all_segments.append(tuple(sorted((v1, v2))))
+
         # Deduplicate segments
         unique_segments = list(set(all_segments))
         
@@ -124,19 +131,73 @@ def generate_mesh(request: MeshRequest) -> MeshResponse:
         mesh_data = triangle.triangulate(tri_input, 'pqaA')
         
         nodes = mesh_data['vertices'].tolist()
-        elements = mesh_data['triangles'].tolist()
+        elements_linear = mesh_data['triangles'].tolist()
         
         # Handle empty mesh result
-        if not elements:
+        if not elements_linear:
              return MeshResponse(
                 success=False,
                 nodes=[],
                 elements=[],
                 boundary_conditions=BoundaryConditionsResponse(full_fixed=[], normal_fixed=[]),
                 point_load_assignments=[],
+                line_load_assignments=[],
                 element_materials=[],
                 error=get_error_info(ErrorCode.VAL_EMPTY_MESH)
             )
+
+
+        # Transform to 6-node quadratic triangles
+        # Standard ordering: [n1, n2, n3, n12, n23, n31]
+        # where n12 = midpoint of edge 1-2, n23 = midpoint of edge 2-3, n31 = midpoint of edge 3-1
+        # This corresponds to standard numbering: [1, 2, 3, 6, 4, 5]
+        
+        # Track edge midpoints to avoid duplicates: edge (min, max) -> midpoint_node_index
+        edge_midpoint_map = {}
+        current_node_idx = len(nodes)
+        
+        elements = []  # Will store 6-node elements
+        
+        for elem_linear in elements_linear:
+            n1, n2, n3 = elem_linear
+            
+            # Get or create midpoint nodes for each edge
+            # IMPORTANT: We need to get the midpoint index regardless of sort order
+            
+            # Edge 1-2 (midpoint goes to position 3 in the 6-node element)
+            edge_12 = tuple(sorted([n1, n2]))
+            if edge_12 not in edge_midpoint_map:
+                p1, p2 = nodes[n1], nodes[n2]
+                mid_12 = [(p1[0] + p2[0]) / 2.0, (p1[1] + p2[1]) / 2.0]
+                nodes.append(mid_12)
+                edge_midpoint_map[edge_12] = current_node_idx
+                current_node_idx += 1
+            n12 = edge_midpoint_map[edge_12]
+            
+            # Edge 2-3 (midpoint goes to position 4 in the 6-node element)
+            edge_23 = tuple(sorted([n2, n3]))
+            if edge_23 not in edge_midpoint_map:
+                p2, p3 = nodes[n2], nodes[n3]
+                mid_23 = [(p2[0] + p3[0]) / 2.0, (p2[1] + p3[1]) / 2.0]
+                nodes.append(mid_23)
+                edge_midpoint_map[edge_23] = current_node_idx
+                current_node_idx += 1
+            n23 = edge_midpoint_map[edge_23]
+            
+            # Edge 3-1 (midpoint goes to position 5 in the 6-node element)
+            edge_31 = tuple(sorted([n3, n1]))
+            if edge_31 not in edge_midpoint_map:
+                p3, p1 = nodes[n3], nodes[n1]
+                mid_31 = [(p3[0] + p1[0]) / 2.0, (p3[1] + p1[1]) / 2.0]
+                nodes.append(mid_31)
+                edge_midpoint_map[edge_31] = current_node_idx
+                current_node_idx += 1
+            n31 = edge_midpoint_map[edge_31]
+            
+            # Create 6-node element with standard ordering: [n1, n2, n3, n12, n23, n31]
+            elements.append([n1, n2, n3, n12, n23, n31])
+
+
 
         # Retrieve element attributes (material indices)
         # triangle returns shape (n, 1), flatten it
@@ -200,6 +261,47 @@ def generate_mesh(request: MeshRequest) -> MeshResponse:
                     assigned_node_id=int(node_idx) + 1 # FE uses 1-based IDs for nodes in this context
                 ))
 
+        # D. Line Loads
+        line_load_assigns = []
+        from backend.models import LineLoadAssignment
+        if request.lineLoads and nodes:
+            node_arr = np.array(nodes)
+            for ll in request.lineLoads:
+                # A line segment (x1,y1) to (x2,y2)
+                p1 = np.array([ll.x1, ll.y1])
+                p2 = np.array([ll.x2, ll.y2])
+                line_vec = p2 - p1
+                line_len = np.linalg.norm(line_vec)
+                if line_len < 1e-9: continue
+                line_unit = line_vec / line_len
+                
+                for el_idx, el in enumerate(elements):
+                    # Check each of the 3 main edges for quadratic triangle: (n1-n2), (n2-n3), (n3-n1)
+                    # Node indices are: n1=el[0], n2=el[1], n3=el[2], n12=el[3], n23=el[4], n31=el[5]
+                    edges = [
+                        (el[0], el[1], el[3]), # Edge 1-2, midpoint n12
+                        (el[1], el[2], el[4]), # Edge 2-3, midpoint n23
+                        (el[2], el[0], el[5])  # Edge 3-1, midpoint n31
+                    ]
+                    
+                    for na, nb, nm in edges:
+                        pa, pb, pm = node_arr[na], node_arr[nb], node_arr[nm]
+                        
+                        # Check if both endpoints and midpoint lie on the line segment
+                        def is_on_segment(p, p1, p2, tol=1e-3):
+                            v = p - p1
+                            proj = np.dot(v, line_unit)
+                            if proj < -tol or proj > line_len + tol: return False
+                            dist = np.linalg.norm(v - proj * line_unit)
+                            return dist < tol
+                        
+                        if is_on_segment(pa, p1, p2) and is_on_segment(pb, p1, p2) and is_on_segment(pm, p1, p2):
+                            line_load_assigns.append(LineLoadAssignment(
+                                line_load_id=ll.id,
+                                element_id=el_idx + 1,
+                                edge_nodes=[int(na)+1, int(nb)+1, int(nm)+1]
+                            ))
+
         return MeshResponse(
             success=True,
             nodes=nodes,
@@ -209,6 +311,7 @@ def generate_mesh(request: MeshRequest) -> MeshResponse:
                 normal_fixed=normal_fixed
             ),
             point_load_assignments=point_load_assigns,
+            line_load_assignments=line_load_assigns,
             element_materials=element_materials
         )
 
