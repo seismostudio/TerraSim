@@ -69,6 +69,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2">
                             <div className="flex items-center justify-between group p-3 rounded-lg hover:bg-slate-800/50 transition-colors">
                                 <div className="space-y-1">
+                                    <label className="text-sm font-semibold text-slate-200">Background Color</label>
+                                    <p className="text-[11px] text-slate-500">Enable dark mode</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only peer"
+                                        checked={localGeneral.dark_background_color}
+                                        onChange={e => setLocalGeneral({ ...localGeneral, dark_background_color: e.target.checked })}
+                                    />
+                                    <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+
+                            <div className="flex items-center justify-between group p-3 rounded-lg hover:bg-slate-800/50 transition-colors">
+                                <div className="space-y-1">
                                     <label className="text-sm font-semibold text-slate-200">Snap to Grid</label>
                                     <p className="text-[11px] text-slate-500">Enable automatic alignment to the grid</p>
                                 </div>

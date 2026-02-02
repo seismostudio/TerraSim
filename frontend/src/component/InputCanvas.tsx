@@ -1,9 +1,11 @@
 import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
+import { WizardTab } from './WizardHeader';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrthographicCamera, OrbitControls, Grid, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { Ruler } from './Ruler';
-import { PolygonData, PointLoad, Material, GeneralSettings, LineLoad } from '../types';
+import { Trash } from 'lucide-react';
+import { PolygonData, PointLoad, Material, GeneralSettings, LineLoad, PhaseType } from '../types';
 
 interface InputCanvasProps {
     polygons: PolygonData[];
@@ -25,7 +27,10 @@ interface InputCanvasProps {
     onDeleteLoad: (id: string) => void;
     onDeleteWaterPoint: (idx: number) => void;
     onDeleteWaterLevel: () => void;
+    onUpdatePolygon?: (idx: number, data: Partial<PolygonData>) => void;
     onToggleActive?: (type: 'polygon' | 'load', id: string | number) => void;
+    activeTab?: WizardTab;
+    currentPhaseType?: PhaseType;
     generalSettings: GeneralSettings;
 }
 
@@ -67,13 +72,13 @@ const Polygon = ({ data, materials, isSelected, isActive, onSelect, onContextMen
         <group onContextMenu={(e) => { e.nativeEvent.preventDefault(); e.stopPropagation(); onContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY); }}>
             {/* Fill */}
             <mesh
-                position={[0, 0, 0]}
+                position={[0, 0, (isSelected ? 2 : 0)]}
                 onClick={(e) => { e.stopPropagation(); onSelect(); }}
             >
                 <shapeGeometry args={[shape]} />
                 <meshBasicMaterial
                     color={fillColor}
-                    opacity={isSelected ? 0.8 : (isActive ? 0.5 : 0.2)}
+                    opacity={isSelected ? 1 : (isActive ? 1 : 0.2)}
                     transparent
                     side={THREE.DoubleSide}
                 />
@@ -246,6 +251,20 @@ const DrawingManager = ({ mode, onAddPolygon, onAddPointLoad, onAddLineLoad, onA
                     onAddLineLoad(p1.x, p1.y, pos.x, pos.y);
                     setTempPoints([]);
                 }
+            } else if ((mode === 'polygon' || mode === 'water_level') && tempPoints.length >= 3) {
+                // Check if clicked the first point to close
+                const firstPoint = tempPoints[0];
+                const dist = Math.sqrt(Math.pow(pos.x - firstPoint.x, 2) + Math.pow(pos.y - firstPoint.y, 2));
+                const snapThreshold = generalSettings.snapToGrid ? 0.1 : 0.2; // Small threshold in world units
+
+                if (dist < snapThreshold) {
+                    const vertices = tempPoints.map(p => ({ x: p.x, y: p.y }));
+                    if (mode === 'polygon') onAddPolygon(vertices);
+                    else if (mode === 'water_level') onAddWaterLevel(vertices);
+                    setTempPoints([]);
+                    return;
+                }
+                setTempPoints(prev => [...prev, pos]);
             } else {
                 setTempPoints(prev => [...prev, pos]);
             }
@@ -322,6 +341,9 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
     activePolygonIndices, activeLoadIds,
     drawMode, onAddPolygon, onAddPointLoad, onAddLineLoad, onAddWaterLevel, onCancelDraw,
     selectedEntity, onSelectEntity, onDeletePolygon, onDeleteLoad, onDeleteWaterPoint, onToggleActive,
+    onUpdatePolygon,
+    activeTab,
+    currentPhaseType,
     generalSettings
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -357,6 +379,10 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
     const handleContextMenu = (clientX: number, clientY: number, target: { type: 'polygon' | 'load', id: string | number }) => {
         if (!containerRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
+
+        // Auto-select when right-clicking
+        onSelectEntity(target);
+
         setContextMenu({
             x: clientX - rect.left,
             y: clientY - rect.top,
@@ -364,14 +390,17 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
         });
     };
 
+    const backgroundColor = generalSettings.dark_background_color ? "bg-slate-900" : "bg-gray-100";
+    const gridColor = generalSettings.dark_background_color ? "#535c66" : "#595959";
+
     return (
-        <div ref={containerRef} className="w-full h-full bg-slate-900 overflow-hidden outline-none relative">
+        <div ref={containerRef} className={`w-full h-full ${backgroundColor} overflow-hidden outline-none relative`}>
             <Canvas onPointerMissed={() => onSelectEntity(null)}>
                 <OrthographicCamera makeDefault position={[0, 0, 90]} zoom={20} />
                 <OrbitControls enableRotate={false} />
                 <ambientLight intensity={1.0} />
-                <Grid position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]} args={[500, 500]} sectionColor="#535c66" fadeDistance={100} />
-                <Ruler />
+                <Grid position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]} args={[500, 500]} sectionColor={gridColor} fadeDistance={100} />
+                <Ruler generalSettings={generalSettings} />
 
                 {water_level && water_level.length > 0 && (
                     <group onClick={(e) => { e.stopPropagation(); }}>
@@ -450,27 +479,73 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
                 />
             </Canvas>
 
-            {contextMenu && onToggleActive && (
+            {contextMenu && (
                 <div
-                    className="absolute bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 z-50 min-w-[120px]"
+                    className="absolute bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 z-50 min-w-[150px]"
                     style={{ left: contextMenu.x, top: contextMenu.y }}
+                    onClick={(e) => e.stopPropagation()}
                 >
-                    <button
-                        className="cursor-pointer w-full text-left px-4 py-2 text-[10px] font-bold text-slate-100 hover:bg-slate-700 transition"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleActive(contextMenu.target.type, contextMenu.target.id);
-                            setContextMenu(null);
-                        }}
-                    >
-                        {(contextMenu.target.type === 'polygon'
-                            ? activePolygonIndices?.includes(contextMenu.target.id as number)
-                            : activeLoadIds?.includes(contextMenu.target.id as string))
-                            ? 'Deactivate Element'
-                            : 'Activate Element'}
-                    </button>
+                    {/* Toggle Active (only in staging/if prop exists) */}
+                    {onToggleActive && currentPhaseType !== PhaseType.SAFETY_ANALYSIS && (
+                        <button
+                            className="cursor-pointer w-full text-left px-4 py-2 text-[10px] font-bold text-slate-100 hover:bg-slate-700 transition border-b border-slate-700/50"
+                            onClick={() => {
+                                onToggleActive(contextMenu.target.type, contextMenu.target.id);
+                                setContextMenu(null);
+                            }}
+                        >
+                            {(contextMenu.target.type === 'polygon'
+                                ? activePolygonIndices?.includes(contextMenu.target.id as number)
+                                : activeLoadIds?.includes(contextMenu.target.id as string))
+                                ? 'Deactivate Element'
+                                : 'Activate Element'}
+                        </button>
+                    )}
+
+                    {/* Assign Material (Polygons only) - Hidden in STAGING */}
+                    {contextMenu.target.type === 'polygon' && onUpdatePolygon && activeTab !== WizardTab.STAGING && (
+                        <div className="group/sub relative">
+                            <div className="flex items-center justify-between px-4 py-2 text-[10px] font-bold text-slate-100 hover:bg-slate-700 transition cursor-default">
+                                <span>Assign Material</span>
+                                <span className="opacity-50">›</span>
+                            </div>
+                            <div className="hidden group-hover/sub:block absolute left-full top-0 ml-[-1px] bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 min-w-[120px] max-h-[200px] overflow-y-auto custom-scrollbar">
+                                {materials.map(mat => (
+                                    <button
+                                        key={mat.id}
+                                        className="cursor-pointer w-full text-left px-4 py-2 text-[10px] text-slate-100 hover:bg-slate-700 transition flex items-center gap-2"
+                                        onClick={() => {
+                                            onUpdatePolygon(contextMenu.target.id as number, { materialId: mat.id });
+                                            setContextMenu(null);
+                                        }}
+                                    >
+                                        <div className="w-4 h-4" style={{ backgroundColor: mat.color }} />
+                                        <span className="truncate">{mat.name}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Delete Option - Hidden in STAGING */}
+                    {activeTab !== WizardTab.STAGING && (
+                        <button
+                            className="cursor-pointer w-full text-left px-4 py-2 text-[10px] font-bold text-rose-400 hover:bg-rose-500/10 transition flex items-center gap-2"
+                            onClick={() => {
+                                if (contextMenu.target.type === 'polygon') {
+                                    onDeletePolygon(contextMenu.target.id as number);
+                                } else if (contextMenu.target.type === 'load') {
+                                    onDeleteLoad(contextMenu.target.id as string);
+                                }
+                                setContextMenu(null);
+                            }}
+                        >
+                            <Trash className="w-3 h-3" />
+                            <span>Delete {contextMenu.target.type === 'polygon' ? 'Polygon' : 'Load'}</span>
+                        </button>
+                    )}
                 </div>
             )}
-        </div>
+        </div >
     );
 };

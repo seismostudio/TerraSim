@@ -13,10 +13,10 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({ material, onSave, 
 
     return (
         <div className="fixed inset-0 w-screen h-screen bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
-            <div className="bg-slate-900 p-8 rounded-xl w-full max-w-[800px] border border-slate-700 shadow-2xl text-white">
+            <div className="bg-slate-900 p-8 rounded-xl w-full max-w-[800px] max-h-[70vh] overflow-y-auto custom-scrollbar border border-slate-700 shadow-2xl text-white">
                 <h3 className="text-lg font-bold text-slate-100 border-b border-slate-800 pb-2">Edit Material: <span className="text-blue-400">{edited.name}</span></h3>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid md:grid-cols-2 grid-cols-1 gap-6">
                     <div className='border-r border-slate-800 pr-2'>
                         <div className='titlelabel mt-2 border-b border-slate-800 pb-1'>
                             General Information

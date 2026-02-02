@@ -61,7 +61,7 @@ export const StagingSidebar: React.FC<StagingSidebarProps> = ({
     };
 
     return (
-        <div className="w-[300px] flex flex-col border-r border-slate-700 h-full overflow-y-auto bg-slate-900 custom-scrollbar">
+        <div className="md:w-[350px] w-[calc(100vw-40px)] md:h-full h-[calc(100vh-90px)] pb-30 overflow-y-auto flex flex-col border-r border-slate-700 bg-slate-900 custom-scrollbar">
             <div className="dropdownlabel">Phases</div>
             <div className="p-4 space-y-2">
                 {phases.map((p, i) => (
@@ -168,8 +168,19 @@ export const StagingSidebar: React.FC<StagingSidebarProps> = ({
                                         <select
                                             value={p.parent_id || ""}
                                             onChange={(e) => {
+                                                const newParentId = e.target.value;
                                                 const newPhases = [...phases];
-                                                newPhases[i] = { ...p, parent_id: e.target.value };
+                                                const updatedPhase = { ...p, parent_id: newParentId };
+
+                                                if (p.phase_type === PhaseType.SAFETY_ANALYSIS) {
+                                                    const parent = phases.find(ph => ph.id === newParentId);
+                                                    if (parent) {
+                                                        updatedPhase.active_polygon_indices = [...parent.active_polygon_indices];
+                                                        updatedPhase.active_load_ids = [...parent.active_load_ids];
+                                                    }
+                                                }
+
+                                                newPhases[i] = updatedPhase;
                                                 onPhasesChange(newPhases);
                                             }}
                                             className="w-full bg-slate-900/50 text-white border border-white/10 rounded px-2 py-1.5 text-[10px] outline-none hover:bg-slate-900 transition-colors cursor-pointer"
@@ -206,7 +217,7 @@ export const StagingSidebar: React.FC<StagingSidebarProps> = ({
             <div className="dropdownlabel flex justify-between items-center">
                 <span>Component Explorer</span>
             </div>
-            <div className={`p-4 space-y-4 ${currentPhase?.phase_type === PhaseType.SAFETY_ANALYSIS ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className={`p-4 space-y-4 mb-8 ${currentPhase?.phase_type === PhaseType.SAFETY_ANALYSIS ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div>
                     <div className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest">POLYGONS</div>
                     <div className="space-y-2">

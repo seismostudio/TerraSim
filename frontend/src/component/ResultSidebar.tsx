@@ -204,12 +204,12 @@ export const ResultSidebar: React.FC<ResultSidebarProps> = ({
     solverResult, isRunning, onRun, onCancel, phases, currentPhaseIdx, onSelectPhase, liveStepPoints = []
 }) => {
     return (
-        <div className="absolute top-4 right-4 bottom-4 w-72 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-2xl shadow-2xl flex flex-col z-20 overflow-hidden">
-            <div className="p-5 border-b border-slate-800 bg-slate-800/20">
+        <div className="absolute md:top-4 md:right-4 md:bottom-25 right-0 top-0 bottom-0 md:w-72 w-[calc(100%-40px)] bg-slate-900/95 backdrop-blur-md md:border border-l border-slate-700 md:rounded-2xl shadow-2xl flex flex-col md:z-20 z-50">
+            <div className={"p-5 border-b border-slate-800 bg-slate-800/20 " + (isRunning ? "grid grid-cols-2 gap-2 items-center" : "")}>
                 <button
                     onClick={onRun}
                     disabled={isRunning}
-                    className={`cursor-pointer w-full py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg ${isRunning
+                    className={`cursor-pointer w-full py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all md:shadow-lg ${isRunning
                         ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                         : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20 hover:scale-[1.02]'
                         }`}
@@ -228,21 +228,24 @@ export const ResultSidebar: React.FC<ResultSidebarProps> = ({
                 {isRunning && (
                     <button
                         onClick={onCancel}
-                        className="cursor-pointer w-full mt-3 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all bg-rose-500/10 border border-rose-500/50 text-rose-400 hover:bg-rose-500/20"
+                        className="cursor-pointer w-full py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all bg-rose-500/10 border border-rose-500/50 text-rose-400 hover:bg-rose-500/20"
                     >
                         Cancel Analysis
                     </button>
                 )}
+
                 {isRunning && (
-                    <PhaseChart
-                        points={liveStepPoints}
-                        isLive={true}
-                        isSafety={phases[currentPhaseIdx]?.phase_type === PhaseType.SAFETY_ANALYSIS}
-                    />
+                    <div className="col-span-2 md:block hidden">
+                        <PhaseChart
+                            points={liveStepPoints}
+                            isLive={true}
+                            isSafety={phases[currentPhaseIdx]?.phase_type === PhaseType.SAFETY_ANALYSIS}
+                        />
+                    </div>
                 )}
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-3  space-y-2">
                 {solverResult && (
                     <>
                         <div className="space-y-2">
@@ -281,7 +284,7 @@ export const ResultSidebar: React.FC<ResultSidebarProps> = ({
                             </div>
                         </div>
 
-                        <div className="border-t border-slate-800">
+                        <div className="border-t border-slate-800 pb-30">
                             <ResultSummary phaseResult={solverResult.phases[currentPhaseIdx]} />
                         </div>
                     </>

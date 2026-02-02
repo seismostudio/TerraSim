@@ -359,4 +359,5 @@ export const SAMPLE_SOLVER_SETTINGS: SolverSettings = {
 export const SAMPLE_GENERAL_SETTINGS = {
     snapToGrid: true,
     snapSpacing: 0.5,
+    dark_background_color: true,
 };

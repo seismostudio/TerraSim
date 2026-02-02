@@ -17,7 +17,7 @@ export const MeshSidebar: React.FC<MeshSidebarProps> = ({
     onSettingsChange
 }) => {
     return (
-        <div className="w-[350px] flex flex-col border-r border-slate-700 h-full overflow-hidden bg-slate-900">
+        <div className="md:w-[350px] w-[calc(100vw-40px)] md:h-full h-[calc(100vh-90px)] overflow-y-auto flex flex-col border-r border-slate-700 bg-slate-900">
             <div className="dropdownlabel">Mesh Options</div>
 
             {/* Global Mesh Settings */}

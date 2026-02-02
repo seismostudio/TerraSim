@@ -3,7 +3,11 @@ import { useThree, useFrame } from '@react-three/fiber';
 import { Line, Text } from '@react-three/drei';
 import * as THREE from 'three';
 
-export const Ruler: React.FC = () => {
+interface RulerProps {
+    generalSettings: any;
+}
+
+export const Ruler: React.FC<RulerProps> = ({ generalSettings }) => {
     const { camera, size } = useThree();
 
     const [view, setView] = useState({
@@ -70,25 +74,27 @@ export const Ruler: React.FC = () => {
     const horizontalRulerY = view.top - axisOffset;
     const verticalRulerX = view.right - axisOffset;
 
+    const rulerColor = generalSettings.dark_background_color ? "#ffffff" : "#28292a";
+
     return (
         <group>
             {/* Horizontal Axis Bar */}
             <Line
                 points={[[view.left, horizontalRulerY, 0.9], [view.right, horizontalRulerY, 0.9]]}
-                color="white"
+                color={rulerColor}
                 lineWidth={2}
             />
             {xTicks.map(x => (
                 <group key={`x-${x}`}>
                     <Line
                         points={[[x, horizontalRulerY, 0.9], [x, horizontalRulerY - tickLen, 0.9]]}
-                        color="white"
+                        color={rulerColor}
                         lineWidth={2}
                     />
                     <Text
                         position={[x, horizontalRulerY - tickLen * 1.5, 0.9]}
                         fontSize={labelSize}
-                        color="white"
+                        color={rulerColor}
                         anchorX="center"
                         anchorY="top"
                     >
@@ -100,20 +106,20 @@ export const Ruler: React.FC = () => {
             {/* Vertical Axis Bar */}
             <Line
                 points={[[verticalRulerX, view.bottom, 0.9], [verticalRulerX, view.top, 0.9]]}
-                color="white"
+                color={rulerColor}
                 lineWidth={2}
             />
             {yTicks.map(y => (
                 <group key={`y-${y}`}>
                     <Line
                         points={[[verticalRulerX, y, 0.9], [verticalRulerX - tickLen, y, 0.9]]}
-                        color="white"
+                        color={rulerColor}
                         lineWidth={2}
                     />
                     <Text
                         position={[verticalRulerX - tickLen * 1.5, y, 0.9]}
                         fontSize={labelSize}
-                        color="white"
+                        color={rulerColor}
                         anchorX="right"
                         anchorY="middle"
                     >

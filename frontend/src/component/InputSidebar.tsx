@@ -112,7 +112,7 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
 
 
     return (
-        <div className="w-[350px] h-full overflow-y-auto bg-slate-900 border-r border-slate-700 custom-scrollbar">
+        <div className="md:w-fit w-[calc(100vw-40px)] md:h-full h-[calc(100vh-160px)] pb-30 overflow-y-auto bg-slate-900 border-r border-slate-700 custom-scrollbar">
             <div className="dropdownlabel">Materials
                 <button
                     onClick={() => { setIsMaterialOpen(!isMaterialOpen) }}
