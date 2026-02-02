@@ -1,0 +1,17 @@
+{
+    "name": "TerraSim - Advanced Geotechnical Finite Element Analysis Software",
+    "short_name": "TerraSim",
+    "description": "Advanced Geotechnical Finite Element Analysis Software for modern engineers.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0f172a",
+    "theme_color": "#0f172a",
+    "icons": [
+        {
+            "src": "/Logo.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
