@@ -32,6 +32,8 @@ interface InputCanvasProps {
     activeTab?: WizardTab;
     currentPhaseType?: PhaseType;
     generalSettings: GeneralSettings;
+    materialOverrides?: Record<number, string>; // NEW
+    onOverrideMaterial?: (polyIdx: number, matId: string) => void; // NEW
 }
 
 interface PolygonProps {
@@ -41,10 +43,12 @@ interface PolygonProps {
     isActive: boolean;
     onSelect: () => void;
     onContextMenu: (x: number, y: number) => void;
+    overrideMaterialId?: string; // NEW
 }
 
-const Polygon = ({ data, materials, isSelected, isActive, onSelect, onContextMenu }: PolygonProps) => {
-    const material = materials.find(m => m.id === data.materialId);
+const Polygon = ({ data, materials, isSelected, isActive, onSelect, onContextMenu, overrideMaterialId }: PolygonProps) => {
+    const effectiveMaterialId = overrideMaterialId || data.materialId;
+    const material = materials.find(m => m.id === effectiveMaterialId);
     let fillColor = material ? material.color : '#334155';
     let lineColor = "white";
 
@@ -344,7 +348,9 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
     onUpdatePolygon,
     activeTab,
     currentPhaseType,
-    generalSettings
+    generalSettings,
+    materialOverrides,
+    onOverrideMaterial
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, target: { type: 'polygon' | 'load', id: string | number } } | null>(null);
@@ -425,6 +431,7 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
                 {polygons.map((poly, i) => {
                     const isSelected = selectedEntity?.type === 'polygon' && selectedEntity.id === i;
                     const isActive = activePolygonIndices ? activePolygonIndices.includes(i) : true;
+                    const overrideId = activeTab === WizardTab.STAGING && materialOverrides ? materialOverrides[i] : undefined;
                     return (
                         <Polygon
                             key={i}
@@ -434,6 +441,7 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
                             isActive={isActive}
                             onSelect={() => onSelectEntity({ type: 'polygon', id: i })}
                             onContextMenu={(x, y) => handleContextMenu(x, y, { type: 'polygon', id: i })}
+                            overrideMaterialId={overrideId}
                         />
                     );
                 })}
@@ -502,30 +510,36 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
                         </button>
                     )}
 
-                    {/* Assign Material (Polygons only) - Hidden in STAGING */}
-                    {contextMenu.target.type === 'polygon' && onUpdatePolygon && activeTab !== WizardTab.STAGING && (
-                        <div className="group/sub relative">
-                            <div className="flex items-center justify-between px-4 py-2 text-[10px] font-bold text-slate-100 hover:bg-slate-700 transition cursor-default">
-                                <span>Assign Material</span>
-                                <span className="opacity-50">›</span>
+                    {/* Assign Material (Polygons only) - Visible in INPUT or STAGING (Plastic/K0) */}
+                    {contextMenu.target.type === 'polygon' && (onUpdatePolygon || onOverrideMaterial) && (
+                        /* Hide if in STAGING but Safety Analysis (locked) */
+                        !(activeTab === WizardTab.STAGING && currentPhaseType === PhaseType.SAFETY_ANALYSIS) && (
+                            <div className="group/sub relative">
+                                <div className="flex items-center justify-between px-4 py-2 text-[10px] font-bold text-slate-100 hover:bg-slate-700 transition cursor-default">
+                                    <span>{activeTab === WizardTab.STAGING ? "Override Material" : "Assign Material"}</span>
+                                    <span className="opacity-50">›</span>
+                                </div>
+                                <div className="hidden group-hover/sub:block absolute left-full top-0 ml-[-1px] bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 min-w-[120px] max-h-[200px] overflow-y-auto custom-scrollbar">
+                                    {materials.map(mat => (
+                                        <button
+                                            key={mat.id}
+                                            className="cursor-pointer w-full text-left px-4 py-2 text-[10px] text-slate-100 hover:bg-slate-700 transition flex items-center gap-2"
+                                            onClick={() => {
+                                                if (activeTab === WizardTab.STAGING && onOverrideMaterial) {
+                                                    onOverrideMaterial(contextMenu.target.id as number, mat.id);
+                                                } else if (onUpdatePolygon) {
+                                                    onUpdatePolygon(contextMenu.target.id as number, { materialId: mat.id });
+                                                }
+                                                setContextMenu(null);
+                                            }}
+                                        >
+                                            <div className="w-4 h-4" style={{ backgroundColor: mat.color }} />
+                                            <span className="truncate">{mat.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                            <div className="hidden group-hover/sub:block absolute left-full top-0 ml-[-1px] bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 min-w-[120px] max-h-[200px] overflow-y-auto custom-scrollbar">
-                                {materials.map(mat => (
-                                    <button
-                                        key={mat.id}
-                                        className="cursor-pointer w-full text-left px-4 py-2 text-[10px] text-slate-100 hover:bg-slate-700 transition flex items-center gap-2"
-                                        onClick={() => {
-                                            onUpdatePolygon(contextMenu.target.id as number, { materialId: mat.id });
-                                            setContextMenu(null);
-                                        }}
-                                    >
-                                        <div className="w-4 h-4" style={{ backgroundColor: mat.color }} />
-                                        <span className="truncate">{mat.name}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                        ))}
 
                     {/* Delete Option - Hidden in STAGING */}
                     {activeTab !== WizardTab.STAGING && (

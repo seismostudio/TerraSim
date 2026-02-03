@@ -173,6 +173,7 @@ export interface PhaseRequest {
     active_polygon_indices: number[];
     active_load_ids: string[];
     reset_displacements?: boolean;
+    material_overrides?: Record<number, string>; // polygon_index -> material_id
 }
 
 export interface SolverRequest {
@@ -182,6 +183,7 @@ export interface SolverRequest {
     water_level?: Point[];
     point_loads?: PointLoad[]; // Definitions
     line_loads?: LineLoad[];
+    materials?: Material[]; // NEW: Material library for overrides
 }
 
 export interface NodeResult {

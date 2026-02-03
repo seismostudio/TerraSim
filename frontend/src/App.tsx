@@ -129,7 +129,8 @@ function MainApp() {
                 phases: phases,
                 water_level: waterLevel,
                 point_loads: pointLoads,
-                line_loads: lineLoads
+                line_loads: lineLoads,
+                materials: materials // NEW
             }, controller.signal);
 
             if (!response.ok) {
@@ -505,6 +506,39 @@ function MainApp() {
         setPhases(newPhases);
     };
 
+    const handleOverrideMaterial = (polyIdx: number, matId: string) => {
+        const newPhases = [...phases];
+        const phase = { ...newPhases[currentPhaseIdx] };
+
+        if (!phase.material_overrides) phase.material_overrides = {};
+
+        // If assigning same as original (hard to check cheaply without material lookup), just set it.
+        // Or if we want to "reset", we might need a separate action. 
+        // For now, just set/overwrite.
+        phase.material_overrides = { ...phase.material_overrides, [polyIdx]: matId };
+
+        newPhases[currentPhaseIdx] = phase;
+
+        // Propagate overrides to child Safety phases
+        const propagateOverrides = (pts: PhaseRequest[], parentId: string) => {
+            pts.forEach((ph, i) => {
+                if (ph.parent_id === parentId && ph.phase_type === PhaseType.SAFETY_ANALYSIS) {
+                    const parent = pts.find(p => p.id === parentId);
+                    if (parent && parent.material_overrides) {
+                        pts[i] = {
+                            ...ph,
+                            material_overrides: { ...parent.material_overrides }
+                        };
+                        propagateOverrides(pts, ph.id);
+                    }
+                }
+            });
+        };
+
+        propagateOverrides(newPhases, phase.id);
+        setPhases(newPhases);
+    };
+
     const currentPhase = phases[currentPhaseIdx];
     const [inputSideBarOpen, setInputSideBarOpen] = useState(false);
     const [meshSideBarOpen, setMeshSideBarOpen] = useState(false);
@@ -707,6 +741,8 @@ function MainApp() {
                             activeTab={activeTab}
                             currentPhaseType={currentPhase?.phase_type}
                             generalSettings={generalSettings}
+                            materialOverrides={currentPhase?.material_overrides}
+                            onOverrideMaterial={handleOverrideMaterial}
                         />
                     )}
 
@@ -722,6 +758,7 @@ function MainApp() {
                                     showControls={false}
                                     ignorePhases={true}
                                     generalSettings={generalSettings}
+                                    materials={materials}
                                 />
                             ) : (
                                 <div className="text-slate-500 text-sm animate-pulse">Click "Generate Mesh" to see the mesh</div>
@@ -738,6 +775,7 @@ function MainApp() {
                                 currentPhaseIdx={currentPhaseIdx}
                                 phases={phases}
                                 generalSettings={generalSettings}
+                                materials={materials}
                             />
                             <div className={`md:hidden block absolute top-0 right-0 w-10 p-2 h-full border-l border-slate-700 bg-slate-900 z-48 ${resultSideBarOpen ? '-translate-x-[calc(100vw-40px)]' : 'translate-x-0'} transition`}>
                                 <button onClick={() => setResultSideBarOpen(!resultSideBarOpen)}>

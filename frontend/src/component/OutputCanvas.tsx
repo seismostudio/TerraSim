@@ -1,11 +1,10 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrthographicCamera, OrbitControls, Grid, Line } from '@react-three/drei';
+import { OrthographicCamera, OrbitControls, Grid, Line, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { MeshResponse, SolverResponse, OutputType, PhaseRequest, PolygonData } from '../types';
+import { MeshResponse, SolverResponse, OutputType, PhaseRequest, PolygonData, Material, GeneralSettings } from '../types';
 import { MathRender } from './Math';
 import { ChevronDown } from 'lucide-react';
-import { GeneralSettings } from '../types';
 
 interface OutputCanvasProps {
     mesh: MeshResponse | null;
@@ -16,6 +15,7 @@ interface OutputCanvasProps {
     showControls?: boolean;
     ignorePhases?: boolean;
     generalSettings: GeneralSettings;
+    materials: Material[]; // NEW
 }
 
 interface PolygonProps {
@@ -47,7 +47,8 @@ const MeshResult = ({
     deformationScale,
     outputType,
     onValueRangeChange,
-    ignorePhases = false
+    ignorePhases = false,
+    materials // NEW
 }: {
     mesh: MeshResponse,
     solverResult: SolverResponse | null,
@@ -56,7 +57,8 @@ const MeshResult = ({
     deformationScale: number,
     outputType: OutputType,
     onValueRangeChange: (min: number, max: number, label: React.ReactNode) => void,
-    ignorePhases?: boolean
+    ignorePhases?: boolean,
+    materials: Material[]
 }) => {
     const { positions, colors, wireframePositions, rangeData } = useMemo(() => {
         if (!mesh) return {
@@ -70,10 +72,11 @@ const MeshResult = ({
         const phaseResult = solverResult?.phases?.[currentPhaseIdx];
         const phaseRequest = phases[currentPhaseIdx];
         const activePolygons = new Set(phaseRequest?.active_polygon_indices || []);
+        const overrides = phaseRequest?.material_overrides || {}; // Get Overrides
 
         const isSolidMaterial = outputType === OutputType.DEFORMED_MESH;
 
-        // Find active elements
+        // Find active elements (logic unchanged)
         const activeElementIndices: number[] = [];
         mesh.elements.forEach((_, i) => {
             const elemMaterial = mesh.element_materials[i];
@@ -83,7 +86,7 @@ const MeshResult = ({
             }
         });
 
-        // Helper to get deformed position
+        // Helper to get deformed position (unchanged)
         const getDeformedPos = (nIdx: number) => {
             let x = mesh.nodes[nIdx][0];
             let y = mesh.nodes[nIdx][1];
@@ -116,7 +119,18 @@ const MeshResult = ({
 
             activeElementIndices.forEach((elemIdx, i) => {
                 const elem = mesh.elements[elemIdx];
-                const mat = mesh.element_materials[elemIdx]?.material;
+                const elemMatInfo = mesh.element_materials[elemIdx];
+
+                // Determine effective material
+                let mat = elemMatInfo?.material;
+                if (!ignorePhases && elemMatInfo?.polygon_id !== undefined && elemMatInfo.polygon_id !== null) {
+                    const overrideId = overrides[elemMatInfo.polygon_id];
+                    if (overrideId) {
+                        const foundMat = materials.find(m => m.id === overrideId);
+                        if (foundMat) mat = foundMat;
+                    }
+                }
+
                 const mColor = mat?.color ? new THREE.Color(mat.color) : new THREE.Color(0.23, 0.51, 0.96);
 
                 const [n1, n2, n3, n12, n23, n31] = elem;
@@ -153,17 +167,7 @@ const MeshResult = ({
                 rangeData: { min: 0, max: 0, label: "" }
             };
         } else {
-            const polygonGroups = new Map<number, number[]>();
-            activeElementIndices.forEach(elemIdx => {
-                const mat = mesh.element_materials[elemIdx];
-                const polyId = mat?.polygon_id ?? -1;
-                if (!polygonGroups.has(polyId)) polygonGroups.set(polyId, []);
-                polygonGroups.get(polyId)!.push(elemIdx);
-            });
-
-            const groupNodeValues = new Map<number, Map<number, number>>();
-            let currentLabel: React.ReactNode = "";
-
+            // NEW: Define helper at top level of useMemo scope
             const getStressValue = (s: any) => {
                 const p_steady = s.pwp_steady || 0;
                 const p_excess = s.pwp_excess || 0;
@@ -174,17 +178,23 @@ const MeshResult = ({
                 const avg = (s.sig_xx + s.sig_yy) / 2;
                 const diff = (s.sig_xx - s.sig_yy) / 2;
                 const radius = Math.sqrt(diff * diff + s.sig_xy * s.sig_xy);
-                if (outputType === OutputType.SIGMA_1) return avg - radius; // major principal stress (use - for compression)
-                if (outputType === OutputType.SIGMA_3) return avg + radius; // minor principal stress (use + for tension)
-                const sxx_eff = s.sig_xx - p_total;
-                const syy_eff = s.sig_yy - p_total;
-                const avg_eff = (sxx_eff + syy_eff) / 2;
-                const diff_eff = (sxx_eff - syy_eff) / 2;
-                const r_eff = Math.sqrt(diff_eff * diff_eff + s.sig_xy * s.sig_xy);
-                if (outputType === OutputType.SIGMA_1_EFF) return avg_eff - r_eff; // major principal stress (use - for compression)
-                if (outputType === OutputType.SIGMA_3_EFF) return avg_eff + r_eff; // minor principal stress (use + for tension)
+                if (outputType === OutputType.SIGMA_1) return avg - radius;
+                if (outputType === OutputType.SIGMA_3) return avg + radius;
+                if (outputType === OutputType.SIGMA_1_EFF) return (avg - radius) - p_total;
+                if (outputType === OutputType.SIGMA_3_EFF) return (avg + radius) - p_total;
                 return 0;
             };
+
+            const polygonGroups = new Map<number, number[]>();
+            activeElementIndices.forEach(elemIdx => {
+                const mat = mesh.element_materials[elemIdx];
+                const polyId = mat?.polygon_id ?? -1;
+                if (!polygonGroups.has(polyId)) polygonGroups.set(polyId, []);
+                polygonGroups.get(polyId)!.push(elemIdx);
+            });
+
+            const groupNodeValues = new Map<number, Map<number, number>>();
+            let currentLabel: React.ReactNode = "";
 
             if (outputType === OutputType.PWP_STEADY) currentLabel = <span className="flex items-center gap-1">PWP Steady <MathRender tex="(kN/m^2)" /></span>;
             else if (outputType === OutputType.PWP_EXCESS) currentLabel = <span className="flex items-center gap-1">PWP Excess <MathRender tex="(kN/m^2)" /></span>;
@@ -204,6 +214,7 @@ const MeshResult = ({
                 solverResult?.phases?.[currentPhaseIdx - 1]?.displacements.forEach(d => parentDispMap.set(d.id, d));
             }
 
+            // Loop for Smoothing to Nodes
             polygonGroups.forEach((elemIndices, polyId) => {
                 const localValues = new Map<number, number>();
                 const localWeights = new Map<number, number>();
@@ -241,49 +252,191 @@ const MeshResult = ({
                 groupNodeValues.set(polyId, localValues);
             });
 
+            // Calculate Extrema
+            // NEW STRATEGY: For flat shading, use min/max of AVERAGED triangle values (not raw GP values)
+            // This better represents what's actually displayed
             let min = Infinity, max = -Infinity;
-            groupNodeValues.forEach((map) => {
-                map.forEach((v) => {
-                    if (v < min) min = v;
-                    if (v > max) max = v;
+
+            // NEW: Flat-shaded subdivision approach
+            // Each element subdivided into ~15 small triangles connecting nodes, GPs, and centroid
+            // Estimate: 15 triangles per element * 3 vertices * 3 floats (x,y,z)
+            const TRIS_PER_ELEM = 15;
+            const pos = new Float32Array(activeElementIndices.length * TRIS_PER_ELEM * 3 * 3);
+            const col = new Float32Array(activeElementIndices.length * TRIS_PER_ELEM * 3 * 3);
+            const wfPos = new Float32Array(activeElementIndices.length * 6 * 2 * 3);
+
+            // Gauss Point natural coordinates for tri-6 (standard 3-point integration)
+            const GP_NAT_COORDS = [
+                [1 / 6, 1 / 6],   // GP1
+                [2 / 3, 1 / 6],   // GP2
+                [1 / 6, 2 / 3]    // GP3
+            ];
+
+            // Shape functions for tri-6 at natural coordinates (r, s)
+            const shapeFunctions = (r: number, s: number) => {
+                const t = 1 - r - s;
+                return [
+                    t * (2 * t - 1),      // N1 (corner)
+                    r * (2 * r - 1),      // N2 (corner)
+                    s * (2 * s - 1),      // N3 (corner)
+                    4 * r * t,          // N12 (mid-side)
+                    4 * r * s,          // N23 (mid-side)
+                    4 * s * t           // N31 (mid-side)
+                ];
+            };
+
+            // PASS 1: Calculate all averaged triangle values to find min/max
+            const triangleData: Array<{
+                p1: [number, number, number],
+                p2: [number, number, number],
+                p3: [number, number, number],
+                avgVal: number
+            }> = [];
+
+            let activeElemInOrderIdx = 0;
+
+            polygonGroups.forEach((elemIndices, polyId) => {
+                const localVals = groupNodeValues.get(polyId)!;
+
+                elemIndices.forEach(eIdx => {
+                    const elem = mesh.elements[eIdx];
+
+                    // Get node positions and values
+                    const nodePositions = elem.map(nIdx => getDeformedPos(nIdx)) as [number, number, number][];
+                    const nodeValues = elem.map(nIdx => localVals.get(nIdx) || 0);
+
+                    // Calculate GP positions and values
+                    const gpPositions: [number, number, number][] = [];
+                    const gpValues: number[] = [];
+
+                    const stressInfo = stressMap.get(eIdx + 1);
+
+                    GP_NAT_COORDS.forEach(([r, s], gpIdx) => {
+                        const N = shapeFunctions(r, s);
+                        let x = 0, y = 0, val = 0;
+
+                        for (let i = 0; i < 6; i++) {
+                            x += N[i] * nodePositions[i][0];
+                            y += N[i] * nodePositions[i][1];
+                            val += N[i] * nodeValues[i];
+                        }
+
+                        // For stress views, use actual GP value
+                        if (outputType !== OutputType.DEFORMED_CONTOUR && outputType !== OutputType.YIELD_STATUS && stressInfo && phaseResult) {
+                            const gpStress = phaseResult.stresses.find(s => s.element_id === eIdx + 1 && s.gp_id === gpIdx + 1);
+                            if (gpStress) {
+                                val = getStressValue(gpStress);
+                            }
+                        }
+
+                        gpPositions.push([x, y, 0]);
+                        gpValues.push(val);
+                    });
+
+                    // Calculate centroid position and value (average of GPs)
+                    const centroidPos: [number, number, number] = [
+                        (gpPositions[0][0] + gpPositions[1][0] + gpPositions[2][0]) / 3,
+                        (gpPositions[0][1] + gpPositions[1][1] + gpPositions[2][1]) / 3,
+                        0
+                    ];
+                    const centroidVal = (gpValues[0] + gpValues[1] + gpValues[2]) / 3;
+
+                    // Helper to record triangle data
+                    const recordTriangle = (
+                        p1: [number, number, number], p2: [number, number, number], p3: [number, number, number],
+                        v1: number, v2: number, v3: number
+                    ) => {
+                        const avgVal = (v1 + v2 + v3) / 3;
+                        triangleData.push({ p1, p2, p3, avgVal });
+
+                        // Update min/max based on averaged values
+                        if (outputType !== OutputType.YIELD_STATUS) {
+                            if (avgVal < min) min = avgVal;
+                            if (avgVal > max) max = avgVal;
+                        }
+                    };
+
+                    // Record all triangles
+                    // Inner triangles (centroid to GPs)
+                    recordTriangle(centroidPos, gpPositions[0], gpPositions[1], centroidVal, gpValues[0], gpValues[1]);
+                    recordTriangle(centroidPos, gpPositions[1], gpPositions[2], centroidVal, gpValues[1], gpValues[2]);
+                    recordTriangle(centroidPos, gpPositions[2], gpPositions[0], centroidVal, gpValues[2], gpValues[0]);
+
+                    // Outer triangles (GPs to nodes)
+                    // Region 1 (around n1, connected to GP1)
+                    recordTriangle(gpPositions[0], nodePositions[0], nodePositions[3], gpValues[0], nodeValues[0], nodeValues[3]);
+                    recordTriangle(gpPositions[0], nodePositions[3], centroidPos, gpValues[0], nodeValues[3], centroidVal);
+                    recordTriangle(gpPositions[0], centroidPos, nodePositions[5], gpValues[0], centroidVal, nodeValues[5]);
+                    recordTriangle(gpPositions[0], nodePositions[5], nodePositions[0], gpValues[0], nodeValues[5], nodeValues[0]);
+
+                    // Region 2 (around n2, connected to GP2)
+                    recordTriangle(gpPositions[1], nodePositions[1], nodePositions[4], gpValues[1], nodeValues[1], nodeValues[4]);
+                    recordTriangle(gpPositions[1], nodePositions[4], centroidPos, gpValues[1], nodeValues[4], centroidVal);
+                    recordTriangle(gpPositions[1], centroidPos, nodePositions[3], gpValues[1], centroidVal, nodeValues[3]);
+                    recordTriangle(gpPositions[1], nodePositions[3], nodePositions[1], gpValues[1], nodeValues[3], nodeValues[1]);
+
+                    // Region 3 (around n3, connected to GP3)
+                    recordTriangle(gpPositions[2], nodePositions[2], nodePositions[5], gpValues[2], nodeValues[2], nodeValues[5]);
+                    recordTriangle(gpPositions[2], nodePositions[5], centroidPos, gpValues[2], nodeValues[5], centroidVal);
+                    recordTriangle(gpPositions[2], centroidPos, nodePositions[4], gpValues[2], centroidVal, nodeValues[4]);
+                    recordTriangle(gpPositions[2], nodePositions[4], nodePositions[2], gpValues[2], nodeValues[4], nodeValues[2]);
                 });
             });
+
             if (min === Infinity) { min = 0; max = 0; }
             if (min === max) max = min + 1e-9;
 
-            const pos = new Float32Array(activeElementIndices.length * 4 * 3 * 3);
-            const col = new Float32Array(activeElementIndices.length * 4 * 3 * 3);
-            const wfPos = new Float32Array(activeElementIndices.length * 6 * 2 * 3);
-
+            // PASS 2: Render all triangles with normalized colors
             let vPtr = 0;
-            let activeElemInOrderIdx = 0;
-            polygonGroups.forEach((elemIndices, polyId) => {
-                const localVals = groupNodeValues.get(polyId)!;
+            activeElemInOrderIdx = 0;
+
+            let triIdx = 0;
+            polygonGroups.forEach((elemIndices) => {
                 elemIndices.forEach(eIdx => {
+                    // Material color for Yield Status
+                    const elemMatInfo = mesh.element_materials[eIdx];
+                    let mat = elemMatInfo?.material;
+                    if (!ignorePhases && elemMatInfo?.polygon_id !== undefined && elemMatInfo.polygon_id !== null) {
+                        const overrideId = overrides[elemMatInfo.polygon_id];
+                        if (overrideId) {
+                            const foundMat = materials.find(m => m.id === overrideId);
+                            if (foundMat) mat = foundMat;
+                        }
+                    }
+                    const mColor = mat?.color ? new THREE.Color(mat.color) : new THREE.Color(0.23, 0.51, 0.96);
+
                     const elem = mesh.elements[eIdx];
                     const [n1, n2, n3, n12, n23, n31] = elem;
 
-                    const tris = [[n1, n12, n31], [n12, n2, n23], [n23, n3, n31], [n12, n23, n31]];
-                    tris.forEach(triNodes => {
-                        triNodes.forEach(nIdx => {
-                            const dPos = getDeformedPos(nIdx);
-                            pos[vPtr * 3] = dPos[0]; pos[vPtr * 3 + 1] = dPos[1]; pos[vPtr * 3 + 2] = dPos[2];
-                            const val = localVals.get(nIdx) || 0;
-                            if (outputType === OutputType.YIELD_STATUS) {
-                                if (val > 0.5) { col[vPtr * 3] = 1.0; col[vPtr * 3 + 1] = 0.2; col[vPtr * 3 + 2] = 0.2; }
-                                else { col[vPtr * 3] = 0.2; col[vPtr * 3 + 1] = 0.8; col[vPtr * 3 + 2] = 0.2; }
-                            } else {
-                                const norm = (val - min) / (max - min);
-                                const rgb = outputType === OutputType.DEFORMED_CONTOUR ? getJetColor(norm) : getStressColor(norm);
-                                col[vPtr * 3] = rgb[0]; col[vPtr * 3 + 1] = rgb[1]; col[vPtr * 3 + 2] = rgb[2];
-                            }
+                    // Render 15 triangles for this element
+                    for (let i = 0; i < 15; i++) {
+                        const tri = triangleData[triIdx++];
+
+                        let rgb: number[];
+                        if (outputType === OutputType.YIELD_STATUS) {
+                            rgb = [mColor.r, mColor.g, mColor.b];
+                        } else {
+                            const norm = (tri.avgVal - min) / (max - min);
+                            rgb = outputType === OutputType.DEFORMED_CONTOUR ? getJetColor(norm) : getStressColor(norm);
+                        }
+
+                        // Add all 3 vertices with same color (flat shading)
+                        [tri.p1, tri.p2, tri.p3].forEach(p => {
+                            pos[vPtr * 3] = p[0];
+                            pos[vPtr * 3 + 1] = p[1];
+                            pos[vPtr * 3 + 2] = p[2];
+                            col[vPtr * 3] = rgb[0];
+                            col[vPtr * 3 + 1] = rgb[1];
+                            col[vPtr * 3 + 2] = rgb[2];
                             vPtr++;
                         });
-                    });
+                    }
 
+                    // Wireframe (outer boundary only)
                     const wfEdges = [[n1, n12], [n12, n2], [n2, n23], [n23, n3], [n3, n31], [n31, n1]];
                     wfEdges.forEach((edge, eInWfIdx) => {
-                        const p1 = getDeformedPos(edge[0]); const p2 = getDeformedPos(edge[1]);
+                        const p1 = getDeformedPos(edge[0]);
+                        const p2 = getDeformedPos(edge[1]);
                         const baseIdx = (activeElemInOrderIdx * 6 + eInWfIdx) * 6;
                         wfPos[baseIdx] = p1[0]; wfPos[baseIdx + 1] = p1[1]; wfPos[baseIdx + 2] = p1[2];
                         wfPos[baseIdx + 3] = p2[0]; wfPos[baseIdx + 4] = p2[1]; wfPos[baseIdx + 5] = p2[2];
@@ -300,7 +453,7 @@ const MeshResult = ({
                 rangeData: { min, max, label: currentLabel }
             };
         }
-    }, [mesh, solverResult, currentPhaseIdx, phases, deformationScale, outputType, ignorePhases]);
+    }, [mesh, solverResult, currentPhaseIdx, phases, deformationScale, outputType, ignorePhases, materials]);
 
     // Update range legend via effect
     React.useEffect(() => {
@@ -396,7 +549,8 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
     phases,
     showControls = true,
     ignorePhases = false,
-    generalSettings
+    generalSettings,
+    materials
 }) => {
     const [sliderValue, setSliderValue] = useState(100);
     const [outputType, setOutputType] = useState<OutputType>(OutputType.DEFORMED_CONTOUR);
@@ -404,6 +558,12 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
     const [showNodes, setShowNodes] = useState(false);
     const [showGaussPoints, setShowGaussPoints] = useState(false);
     const [showLog, setShowLog] = useState(false);
+
+    useEffect(() => {
+        if (outputType === OutputType.YIELD_STATUS) {
+            setShowGaussPoints(true);
+        }
+    }, [outputType]);
 
     const scale = outputType === OutputType.DEFORMED_MESH ? sliderValue : 0;
 
@@ -421,6 +581,13 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
 
     const backgroundColor = generalSettings.dark_background_color ? "bg-slate-900" : "bg-gray-100";
     const isMobile = window.innerWidth < 768;
+
+    const [hoveredItem, setHoveredItem] = useState<{
+        type: 'node' | 'gp',
+        id: number | string,
+        position: [number, number, number],
+        label: React.ReactNode
+    } | null>(null);
 
     return (
         <div className={`w-full h-full ${backgroundColor} absolute inset-0 overflow-hidden`}>
@@ -590,17 +757,53 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
                             outputType={outputType}
                             onValueRangeChange={handleRangeChange}
                             ignorePhases={ignorePhases}
+                            materials={materials}
                         />
 
                         {/* Render Nodes if enabled */}
                         {showNodes && outputType !== OutputType.DEFORMED_MESH && (
                             <>
-                                {mesh.nodes.map((node, i) => (
-                                    <mesh key={`node-${i}`} position={[node[0], node[1], 0.1]}>
-                                        <circleGeometry args={[0.02, 16]} />
-                                        <meshBasicMaterial color="#ffffff" />
-                                    </mesh>
-                                ))}
+                                {mesh.nodes.map((node, i) => {
+                                    // Calculate displacement for this node
+                                    const nodeId = i + 1;
+                                    let content: React.ReactNode = `Node ${nodeId}`;
+
+                                    const phaseResult = solverResult?.phases?.[currentPhaseIdx];
+                                    if (phaseResult) {
+                                        const d = phaseResult.displacements.find(d => d.id === nodeId);
+                                        if (d) {
+                                            const total = Math.sqrt(d.ux ** 2 + d.uy ** 2);
+                                            content = (
+                                                <div className="text-[10px] w-30 bg-slate-800 text-white p-2 rounded shadow-lg border border-slate-600">
+                                                    <div className="font-bold border-b border-slate-600 mb-1">Node {nodeId}</div>
+                                                    <div>Ux: {d.ux.toExponential(3)} m</div>
+                                                    <div>Uy: {d.uy.toExponential(3)} m</div>
+                                                    <div>|U|: {total.toExponential(3)} m</div>
+                                                </div>
+                                            );
+                                        }
+                                    }
+
+                                    return (
+                                        <mesh
+                                            key={`node-${i}`}
+                                            position={[node[0], node[1], 0.1]}
+                                            onPointerOver={(e) => {
+                                                if (outputType !== OutputType.DEFORMED_CONTOUR) return;
+                                                e.stopPropagation();
+                                                setHoveredItem({
+                                                    type: 'node',
+                                                    id: nodeId,
+                                                    position: [node[0], node[1], 0.1],
+                                                    label: content
+                                                });
+                                            }}
+                                        >
+                                            <circleGeometry args={[0.02, 8]} />
+                                            <meshBasicMaterial color="#ffffff" />
+                                        </mesh>
+                                    );
+                                })}
                             </>
                         )}
 
@@ -646,17 +849,125 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
                                                 y += N[i] * nodes[i][1];
                                             }
                                         }
-                                        let color = "#ffffff"; // Default green
+                                        let gpColor = "#ffffff";
+
+                                        // Dynamic coloring for Yield Status
+                                        if (outputType === OutputType.YIELD_STATUS) {
+                                            const sRes = phaseRes.stresses.find(s => s.element_id === elemIdx + 1 && s.gp_id === gpIdx + 1);
+                                            if (sRes && sRes.is_yielded) {
+                                                gpColor = "#ff0000"; // Red for Yield
+                                            } else {
+                                                gpColor = "#00ff00"; // Green for Elastic
+                                            }
+                                        }
 
                                         return (
-                                            <mesh key={`gauss-${elemIdx}-${gpIdx}`} position={[x, y, 0.1]}>
+                                            <mesh
+                                                key={`gp-${elemIdx}-${gpIdx}`}
+                                                position={[x, y, 0.12]}
+                                                onPointerOver={(e) => {
+                                                    e.stopPropagation();
+
+                                                    // Find Value
+                                                    let valLabel: React.ReactNode = null;
+
+                                                    // Backend returns flat list of StressResult per GP
+                                                    // We need to find the specific GP result
+                                                    const gpRes = phaseRes.stresses.find(s => s.element_id === elemIdx + 1 && s.gp_id === gpIdx + 1);
+
+                                                    if (gpRes) {
+                                                        const { sig_xx, sig_yy, sig_xy, sig_zz, is_yielded, pwp_excess, pwp_steady, pwp_total } = gpRes;
+
+                                                        let title = `GP ${elemIdx + 1}.${gpIdx + 1}`;
+                                                        let body = <></>;
+
+                                                        const s_avg = (sig_xx + sig_yy) / 2;
+                                                        const R = Math.sqrt(Math.pow((sig_xx - sig_yy) / 2, 2) + Math.pow(sig_xy, 2));
+                                                        const sigma1 = s_avg - R;
+                                                        const sigma3 = s_avg + R;
+
+                                                        switch (outputType) {
+                                                            case OutputType.SIGMA_1:
+                                                                title += " - Sigma 1 Total";
+                                                                body = <div>{sigma1.toFixed(2)} kPa</div>;
+                                                                break;
+                                                            case OutputType.SIGMA_3:
+                                                                title += " - Sigma 3 Total";
+                                                                body = <div>{sigma3.toFixed(2)} kPa</div>;
+                                                                break;
+                                                            case OutputType.SIGMA_1_EFF:
+                                                                title += " - Sigma 1 Effective";
+                                                                body = <div>{(sigma1 - (pwp_total || 0)).toFixed(2)} kPa</div>;
+                                                                break;
+                                                            case OutputType.SIGMA_3_EFF:
+                                                                title += " - Sigma 3 Effective";
+                                                                body = <div>{(sigma3 - (pwp_total || 0)).toFixed(2)} kPa</div>;
+                                                                break;
+                                                            case OutputType.PWP_EXCESS:
+                                                                title += " - PWP Excess";
+                                                                body = <div>{(pwp_excess || 0).toFixed(2)} kPa</div>;
+                                                                break;
+                                                            case OutputType.PWP_STEADY:
+                                                                title += " - PWP Steady";
+                                                                body = <div>{(pwp_steady || 0).toFixed(2)} kPa</div>;
+                                                                break;
+                                                            case OutputType.PWP_TOTAL:
+                                                                title += " - PWP Total";
+                                                                body = <div>{(pwp_total || 0).toFixed(2)} kPa</div>;
+                                                                break;
+                                                            case OutputType.YIELD_STATUS:
+                                                                title += " - Yield Status";
+                                                                body = <div className={is_yielded ? "text-red-400 font-bold" : "text-green-400"}>{is_yielded ? "YIELDED" : "Elastic"}</div>;
+                                                                break;
+                                                            default:
+                                                                // Default to full tensor if no specific scalar view or generic view
+                                                                body = (
+                                                                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                                                                        <span>σx:</span> <span className="text-right font-mono">{sig_xx.toExponential(2)}</span>
+                                                                        <span>σy:</span> <span className="text-right font-mono">{sig_yy.toExponential(2)}</span>
+                                                                        <span>τxy:</span> <span className="text-right font-mono">{sig_xy.toExponential(2)}</span>
+                                                                        <span>σz:</span> <span className="text-right font-mono">{sig_zz.toExponential(2)}</span>
+                                                                    </div>
+                                                                );
+                                                                break;
+                                                        }
+
+                                                        valLabel = (
+                                                            <div className="text-[10px] bg-slate-800 text-white p-2 rounded shadow-lg border border-slate-600 min-w-[120px]">
+                                                                <div className="font-bold border-b border-slate-600 mb-1 flex justify-between items-center">
+                                                                    <span>{title}</span>
+
+                                                                </div>
+                                                                {body}
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    setHoveredItem({
+                                                        type: 'gp',
+                                                        id: `${elemIdx}-${gpIdx}`,
+                                                        position: [x, y, 0.12],
+                                                        label: valLabel
+                                                    });
+                                                }}
+                                                onPointerOut={() => setHoveredItem(null)}
+                                            >
                                                 <circleGeometry args={[0.02, 8]} />
-                                                <meshBasicMaterial color={color} />
+                                                <meshBasicMaterial color={gpColor} />
                                             </mesh>
                                         );
                                     });
                                 })}
                             </>
+                        )}
+
+                        {/* Render Tooltip */}
+                        {hoveredItem && (
+                            <Html position={hoveredItem.position} style={{ pointerEvents: 'none' }} zIndexRange={[100, 0]}>
+                                <div className="pointer-events-none transform -translate-x-1/2 -translate-y-[calc(100%+10px)]">
+                                    {hoveredItem.label}
+                                </div>
+                            </Html>
                         )}
                     </>
                 )}

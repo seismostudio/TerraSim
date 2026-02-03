@@ -6,13 +6,23 @@ export interface SoftwareUpdate {
 
 export const SOFTWARE_UPDATES: SoftwareUpdate[] = [
     {
+        version: "v 0.2.3",
+        date: "2026-02-03",
+        changes: [
+            "add material override for each phase",
+            "hover value for displacement and stress",
+            "smoothing value for stress and displacement",
+            "bug fixes",
+        ]
+    },
+    {
         version: "v 0.2.2",
         date: "2026-02-02",
         changes: [
             "add feedback input",
             "responsive design for mobile devices",
-            "bug fixes",
-            "switch dark/light background color"
+            "switch dark/light background color",
+            "bug fixes"
         ]
     },
     {
@@ -23,10 +33,10 @@ export const SOFTWARE_UPDATES: SoftwareUpdate[] = [
             "Updated calculation method from CST to T6 with 3 integration points for better accuracy",
             "Fixed issue with mesh generation for",
             "add excess pore water pressure to the solver",
-            "bug fixes",
             "add line load",
             "save and load projects directly from cloud",
             "add cloud save and load projects",
+            "bug fixes"
         ]
     },
     {
