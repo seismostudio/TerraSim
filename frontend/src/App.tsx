@@ -86,6 +86,7 @@ function MainApp() {
 
     const handleGenerateMesh = async () => {
         setIsGeneratingMesh(true);
+        setSolverResponse(null);  // Clear previous solver results
         try {
             const result = await api.generateMesh({
                 polygons,
@@ -288,8 +289,8 @@ function MainApp() {
             generalSettings,
             solverSettings,
             meshSettings,
-            meshResponse,
-            solverResponse
+            meshResponse
+            // solverResponse excluded for smaller file size
         };
 
         const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
@@ -381,8 +382,8 @@ function MainApp() {
             generalSettings,
             solverSettings,
             meshSettings,
-            meshResponse,
-            solverResponse
+            meshResponse
+            // solverResponse excluded for smaller file size
         };
 
         try {

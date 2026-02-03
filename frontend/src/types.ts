@@ -108,7 +108,7 @@ export interface ProjectFile {
     solverSettings: SolverSettings;
     meshSettings: MeshSettings;
     meshResponse: MeshResponse | null;
-    solverResponse: SolverResponse | null;
+    solverResponse?: SolverResponse | null;  // Optional - excluded from saves
 }
 
 export interface BoundaryCondition {
