@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pydantic import BaseModel
 from enum import Enum
 
@@ -142,6 +142,7 @@ class PhaseRequest(BaseModel):
     active_polygon_indices: List[int] # Indices of polygons in original MeshRequest
     active_load_ids: List[str] # IDs of point/line loads to activate
     reset_displacements: bool = False # If true, reset total displacement visualization
+    material_overrides: Optional[Dict[int, str]] = None # NEW: Map polygon_index -> material_id
 
 class SolverRequest(BaseModel):
     mesh: MeshResponse
@@ -150,6 +151,7 @@ class SolverRequest(BaseModel):
     water_level: Optional[List[Point]] = None
     point_loads: Optional[List[PointLoad]] = [] # Definitions of load vectors
     line_loads: Optional[List[LineLoad]] = []
+    materials: List[Material] = [] # NEW: Library of all available materials
 
 class NodeResult(BaseModel):
     id: int # 1-based

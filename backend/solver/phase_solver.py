@@ -287,7 +287,8 @@ def solve_phases(request: SolverRequest, should_stop=None):
             'material': mat,
             'polygon_id': poly_id,
             'gauss_points': gauss_point_data,  # List of 3 Gauss point dicts
-            'area': area
+            'area': area,
+            'original_material': mat
         })
 
     # Global State Tracking - T6: Store state per Gauss Point (List of 3 items per element)
@@ -299,8 +300,6 @@ def solve_phases(request: SolverRequest, should_stop=None):
     
     phase_results = []
     
-    # Point Load Tracking (to calculate incremental Delta F)
-    # Map node -> [fx, fy]
     # Point Load Tracking (to calculate incremental Delta F)
     # Map node -> [fx, fy]
     active_point_loads = {} 
@@ -315,6 +314,31 @@ def solve_phases(request: SolverRequest, should_stop=None):
         log.append(msg_start)
         yield {"type": "log", "content": msg_start}
         print(msg_start)
+
+        # 0. RESET MATERIAL STATE (Fix for persistence bug)
+        # For non-Safety Analysis phases, revert elements to their original material first.
+        # This prevents overrides from previous phases leaking into future phases.
+        # Safety Analysis phases MUST inherit the material state (including overrides) from their parent phase.
+        if phase.phase_type != PhaseType.SAFETY_ANALYSIS:
+            reset_count = 0
+            for ep in elem_props_all:
+                if ep['material'].id != ep['original_material'].id:
+                    orig_mat = ep['original_material']
+                    # Recompute Element Matrices with ORIGINAL material
+                    coords = np.array([nodes[n] for n in ep['nodes']])
+                    K_el, F_grav, gauss_point_data, D = compute_element_matrices_t6(coords, orig_mat, water_level=water_level_data)
+                    
+                    if K_el is not None:
+                        ep['K'] = K_el
+                        ep['F_grav'] = F_grav
+                        ep['D'] = D
+                        ep['material'] = orig_mat
+                        ep['gauss_points'] = gauss_point_data
+                        reset_count += 1
+            if reset_count > 0:
+                msg_reset = f"Reset {reset_count} elements to original material."
+                log.append(msg_reset)
+                yield {"type": "log", "content": msg_reset}
         
         # 1. Identify Active/Inactive Elements
         active_elem_props = [ep for ep in elem_props_all if ep['polygon_id'] in phase.active_polygon_indices]
@@ -325,6 +349,55 @@ def solve_phases(request: SolverRequest, should_stop=None):
         for ep in active_elem_props:
             for n_idx in ep['nodes']:
                 active_node_indices.add(n_idx)
+
+        # 2.5 Handle Material Overrides
+        if phase.material_overrides:
+            material_map = {m.id: m for m in request.materials}
+            overide_count = 0
+            for poly_idx_str, mat_id in phase.material_overrides.items():
+                poly_idx = int(poly_idx_str)
+                new_mat = material_map.get(mat_id)
+                
+                if not new_mat:
+                    log.append(f"WARNING: Material override ID {mat_id} for polygon {poly_idx} not found in request materials.")
+                    continue
+                
+                # Update all elements belonging to this polygon
+                affected_eps = [ep for ep in elem_props_all if ep['polygon_id'] == poly_idx]
+                
+                if not affected_eps:
+                    log.append(f"WARNING: No elements found for polygon index {poly_idx} to override.")
+                    continue
+                    
+                msg_override = f"Overriding material for Polygon {poly_idx}: New Material '{new_mat.name}' ({new_mat.id})"
+                log.append(msg_override)
+                yield {"type": "log", "content": msg_override}
+                print(msg_override)
+                
+                for ep in affected_eps:
+                    # Recompute Element Matrices with NEW material
+                    coords = np.array([nodes[n] for n in ep['nodes']])
+                    K_el, F_grav, gauss_point_data, D = compute_element_matrices_t6(coords, new_mat, water_level=water_level_data)
+                    
+                    if K_el is not None:
+                        ep['K'] = K_el
+                        ep['F_grav'] = F_grav
+                        ep['D'] = D
+                        ep['material'] = new_mat
+                        ep['gauss_points'] = gauss_point_data
+                        
+                        # Reset state for this element? 
+                        # Ideally, stresses should be carried over? 
+                        # If material changes (e.g. concrete hardening), stiffness changes, but existing stress remains?
+                        # Usually K0 or previous phase stress is valid.
+                        # But D matrix changes, so next increment will use new stiffness.
+                        # Yes, this is correct for "Staged Construction".
+                        
+                overide_count += 1
+            
+            if overide_count > 0:
+                # Re-select active_elem_props to ensure they have the updated pointers (they should already, as dicts are mutable)
+                active_elem_props = [ep for ep in elem_props_all if ep['polygon_id'] in phase.active_polygon_indices]
 
         # Handle K0 Procedure
         if phase.phase_type == PhaseType.K0_PROCEDURE:
