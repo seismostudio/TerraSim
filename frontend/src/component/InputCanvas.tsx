@@ -12,9 +12,10 @@ interface InputCanvasProps {
     pointLoads: PointLoad[];
     lineLoads: LineLoad[];
     materials: Material[];
-    water_level?: { x: number, y: number }[];
+    water_levels?: { id: string, name: string, points: { x: number, y: number }[] }[]; // CHANGED
     activePolygonIndices?: number[];
     activeLoadIds?: string[];
+    activeWaterLevelId?: string; // NEW
     drawMode: string | null;
     onAddPolygon: (vertices: { x: number, y: number }[]) => void;
     onAddPointLoad: (x: number, y: number) => void;
@@ -25,10 +26,10 @@ interface InputCanvasProps {
     onSelectEntity: (selection: { type: string, id: string | number } | null) => void;
     onDeletePolygon: (idx: number) => void;
     onDeleteLoad: (id: string) => void;
-    onDeleteWaterPoint: (idx: number) => void;
-    onDeleteWaterLevel: () => void;
+    onDeleteWaterLevel: (id: string) => void; // CHANGED
     onUpdatePolygon?: (idx: number, data: Partial<PolygonData>) => void;
-    onToggleActive?: (type: 'polygon' | 'load', id: string | number) => void;
+    onToggleActive?: (type: 'polygon' | 'load', id: string | number) => void; // Maybe add water_level later
+    onUpdateWaterLevel?: (index: number, wl: any) => void; // NEW
     activeTab?: WizardTab;
     currentPhaseType?: PhaseType;
     generalSettings: GeneralSettings;
@@ -341,11 +342,11 @@ const DrawingManager = ({ mode, onAddPolygon, onAddPointLoad, onAddLineLoad, onA
 };
 
 export const InputCanvas: React.FC<InputCanvasProps> = ({
-    polygons, pointLoads, lineLoads, materials, water_level,
-    activePolygonIndices, activeLoadIds,
+    polygons, pointLoads, lineLoads, materials, water_levels,
+    activePolygonIndices, activeLoadIds, activeWaterLevelId,
     drawMode, onAddPolygon, onAddPointLoad, onAddLineLoad, onAddWaterLevel, onCancelDraw,
-    selectedEntity, onSelectEntity, onDeletePolygon, onDeleteLoad, onDeleteWaterPoint, onToggleActive,
-    onUpdatePolygon,
+    selectedEntity, onSelectEntity, onDeletePolygon, onDeleteLoad, onDeleteWaterLevel, onToggleActive,
+    onUpdatePolygon, onUpdateWaterLevel,
     activeTab,
     currentPhaseType,
     generalSettings,
@@ -367,13 +368,13 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
                 } else if (selectedEntity.type === 'load') {
                     onDeleteLoad(selectedEntity.id as string);
                 } else if (selectedEntity.type === 'water_level') {
-                    onDeleteWaterPoint(selectedEntity.id as number);
+                    onDeleteWaterLevel(selectedEntity.id as string);
                 }
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedEntity, onDeletePolygon, onDeleteLoad, onDeleteWaterPoint]);
+    }, [selectedEntity, onDeletePolygon, onDeleteLoad, onDeleteWaterLevel]);
 
     // Close context menu on click elsewhere
     useEffect(() => {
@@ -408,25 +409,48 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
                 <Grid position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]} args={[500, 500]} sectionColor={gridColor} fadeDistance={100} />
                 <Ruler generalSettings={generalSettings} />
 
-                {water_level && water_level.length > 0 && (
-                    <group onClick={(e) => { e.stopPropagation(); }}>
-                        <Line
-                            points={water_level.map(p => new THREE.Vector3(p.x, p.y, 0.4))}
-                            color="cyan"
-                            lineWidth={3}
-                        />
-                        {water_level.map((p, i) => (
-                            <mesh
-                                key={i}
-                                position={[p.x, p.y, 0.45]}
-                                onClick={(e) => { e.stopPropagation(); onSelectEntity({ type: 'water_level', id: i }); }}
-                            >
-                                <circleGeometry args={[selectedEntity?.type === 'water_level' && selectedEntity.id === i ? 0.3 : 0.05, 16]} />
-                                <meshBasicMaterial color={selectedEntity?.type === 'water_level' && selectedEntity.id === i ? "#3b82f6" : "cyan"} />
-                            </mesh>
-                        ))}
-                    </group>
-                )}
+                {water_levels && water_levels.map((wl, i) => {
+                    // Determine visual state
+                    // In INPUT tab, show all, maybe selected one brighter? 
+                    // In STAGING tab, highlight activeWaterLevelId, dim others.
+
+                    const isSelected = selectedEntity?.type === 'water_level' && selectedEntity.id === i; // Selection in sidebar passes 'i' usually? Wait, sidebar passes 'i' for selection id in my InputSidebar code.
+                    // Actually, InputSidebar passes `i` as ID for selection. Let's consistency check.
+                    // In InputSidebar: onSelectEntity({ type: 'water_level', id: i })
+                    // Ideally we should use wl.id but Sidebar uses index. Let's stick to index for selection if sidebar does, OR fix sidebar.
+                    // Sidebar uses index. So selectedEntity.id === i is correct for syncing with sidebar.
+
+                    const isActivePhase = activeTab === WizardTab.STAGING ? (wl.id === activeWaterLevelId) : true;
+
+                    // Colors
+                    // Active Phase: Cyan/Blue
+                    // Inactive Phase: Faint Slate
+
+                    let lineColor = isActivePhase ? "cyan" : "#334155";
+                    if (isSelected) lineColor = "#3b82f6"; // Selected overrides
+
+                    return (
+                        <group key={wl.id} onClick={(e) => { e.stopPropagation(); }}>
+                            <Line
+                                points={wl.points.map(p => new THREE.Vector3(p.x, p.y, 0.4))}
+                                color={lineColor}
+                                lineWidth={isSelected || isActivePhase ? 3 : 1}
+                                dashed={!isActivePhase}
+                            />
+                            {/* Only show points if selected or active? Or always? Maybe always but small? */}
+                            {isActivePhase && wl.points.map((p, ptIdx) => (
+                                <mesh
+                                    key={ptIdx}
+                                    position={[p.x, p.y, 0.45]}
+                                    onClick={(e) => { e.stopPropagation(); onSelectEntity({ type: 'water_level', id: i }); }}
+                                >
+                                    <circleGeometry args={[isSelected ? 0.3 : 0.05, 16]} />
+                                    <meshBasicMaterial color={isSelected ? "#3b82f6" : lineColor} />
+                                </mesh>
+                            ))}
+                        </group>
+                    );
+                })}
 
                 {polygons.map((poly, i) => {
                     const isSelected = selectedEntity?.type === 'polygon' && selectedEntity.id === i;

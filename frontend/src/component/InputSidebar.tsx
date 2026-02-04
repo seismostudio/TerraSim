@@ -1,5 +1,5 @@
-import { PolygonData, Material, PointLoad, LineLoad } from '../types';
-import { ChevronDown, Pencil, Trash } from 'lucide-react';
+import { PolygonData, Material, PointLoad, LineLoad, WaterLevel } from '../types';
+import { ChevronDown, Pencil, Trash, ChevronRight, Plus } from 'lucide-react';
 import { MathRender } from './Math';
 import { useState } from 'react';
 
@@ -8,18 +8,18 @@ interface InputSidebarProps {
     polygons: PolygonData[];
     pointLoads: PointLoad[];
     lineLoads: LineLoad[];
-    waterLevel: { x: number; y: number }[];
+    waterLevels: WaterLevel[]; // NEW
     onUpdateMaterials: (m: Material[]) => void;
     onUpdatePolygons: (p: PolygonData[]) => void;
     onUpdateLoads: (l: PointLoad[]) => void;
     onUpdateLineLoads: (l: LineLoad[]) => void;
-    onUpdateWater: (w: { x: number; y: number }[]) => void;
+    onAddWaterLevel: (points: { x: number, y: number }[]) => void; // NEW
+    onUpdateWaterLevel: (index: number, wl: WaterLevel) => void; // NEW
     onEditMaterial: (mat: Material) => void;
     onDeleteMaterial: (id: string) => void;
     onDeletePolygon: (idx: number) => void;
     onDeleteLoad: (id: string) => void;
-    onDeleteWaterPoint: (idx: number) => void;
-    onDeleteWaterLevel: () => void;
+    onDeleteWaterLevel: (id: string) => void;
     selectedEntity: { type: string, id: string | number } | null;
     onSelectEntity: (selection: { type: string, id: string | number } | null) => void;
 }
@@ -29,17 +29,17 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
     polygons,
     pointLoads,
     lineLoads,
-    waterLevel,
+    waterLevels,
     onUpdateMaterials,
     onUpdatePolygons,
     onUpdateLoads,
     onUpdateLineLoads,
-    onUpdateWater,
+    onAddWaterLevel,
+    onUpdateWaterLevel,
     onEditMaterial,
     onDeleteMaterial,
     onDeletePolygon,
     onDeleteLoad,
-    onDeleteWaterPoint,
     onDeleteWaterLevel,
     selectedEntity,
     onSelectEntity
@@ -81,24 +81,6 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
         onUpdateLoads([...pointLoads, newLoad]);
     };
 
-    const handleUpdateWaterX = (idx: number, val: number) => {
-        const newWater = [...waterLevel];
-        newWater[idx] = { ...newWater[idx], x: val };
-        onUpdateWater(newWater);
-    };
-
-    const handleUpdateWaterY = (idx: number, val: number) => {
-        const newWater = [...waterLevel];
-        newWater[idx] = { ...newWater[idx], y: val };
-        onUpdateWater(newWater);
-    };
-
-    const [isMaterialOpen, setIsMaterialOpen] = useState(true);
-    const [isPolygonOpen, setIsPolygonOpen] = useState(true);
-    const [isLoadOpen, setIsLoadOpen] = useState(true);
-    const [isLineLoadOpen, setIsLineLoadOpen] = useState(true);
-    const [isWaterOpen, setIsWaterOpen] = useState(true);
-
     const handleAddLineLoad = () => {
         const newLoad: LineLoad = {
             id: `line_load_${lineLoads.length + 1}`,
@@ -110,9 +92,52 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
         onUpdateLineLoads([...lineLoads, newLoad]);
     };
 
+    // WATER LEVEL HANDLERS
+    const handleAddWaterLevelClick = () => {
+        // Create a default flat water level
+        onAddWaterLevel([
+            { x: 0, y: 5 },
+            { x: 10, y: 5 }
+        ]);
+    };
+
+    const handleUpdateWaterPoint = (wlIndex: number, ptIndex: number, field: 'x' | 'y', value: number) => {
+        const wl = waterLevels[wlIndex];
+        const newPoints = [...wl.points];
+        newPoints[ptIndex] = { ...newPoints[ptIndex], [field]: value };
+        onUpdateWaterLevel(wlIndex, { ...wl, points: newPoints });
+    };
+
+    const handleAddPointToWaterLevel = (wlIndex: number) => {
+        const wl = waterLevels[wlIndex];
+        const lastPt = wl.points[wl.points.length - 1] || { x: 0, y: 0 };
+        const newPt = { x: lastPt.x + 5, y: lastPt.y };
+        onUpdateWaterLevel(wlIndex, { ...wl, points: [...wl.points, newPt] });
+    };
+
+    const handleDeletePointFromWaterLevel = (wlIndex: number, ptIndex: number) => {
+        const wl = waterLevels[wlIndex];
+        if (wl.points.length <= 1) return; // Prevent deleting last point? Or allow empty?
+        const newPoints = wl.points.filter((_, i) => i !== ptIndex);
+        onUpdateWaterLevel(wlIndex, { ...wl, points: newPoints });
+    };
+
+    const handleRenameWaterLevel = (wlIndex: number, newName: string) => {
+        const wl = waterLevels[wlIndex];
+        onUpdateWaterLevel(wlIndex, { ...wl, name: newName });
+    };
+
+    const [isMaterialOpen, setIsMaterialOpen] = useState(true);
+    const [isPolygonOpen, setIsPolygonOpen] = useState(true);
+    const [isLoadOpen, setIsLoadOpen] = useState(true);
+    const [isLineLoadOpen, setIsLineLoadOpen] = useState(true);
+    const [isWaterOpen, setIsWaterOpen] = useState(true);
+    const [expandedWaterLevelId, setExpandedWaterLevelId] = useState<string | null>(null);
+
 
     return (
         <div className="md:w-[400px] w-[calc(100vw-40px)] md:h-full h-[calc(100vh-160px)] pb-30 overflow-y-auto bg-slate-900 border-r border-slate-700 custom-scrollbar">
+            {/* MATERIALS */}
             <div className="dropdownlabel">Materials
                 <button
                     onClick={() => { setIsMaterialOpen(!isMaterialOpen) }}
@@ -161,6 +186,7 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
                 </div>
             )}
 
+            {/* POLYGONS */}
             <div className="dropdownlabel">Polygons
                 <button
                     onClick={() => { setIsPolygonOpen(!isPolygonOpen) }}
@@ -200,7 +226,8 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
                 </div>
             )}
 
-            <div className="dropdownlabel">Water Level
+            {/* WATER LEVELS */}
+            <div className="dropdownlabel">Water Levels
                 <button
                     onClick={() => { setIsWaterOpen(!isWaterOpen) }}
                     className="cursor-pointer p-1.5 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 hover:text-white transition-colors">
@@ -208,45 +235,75 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
                 </button>
             </div>
             {isWaterOpen && (
-                <div className="p-2 space-y-2">
-                    <div className="flex px-2 justify-between items-center w-full text-xs">
-                        <div className="w-1/2">X <MathRender tex="(m)" /></div>
-                        <div className="w-1/2">Y <MathRender tex="(m)" /></div>
-                    </div>
-                    {waterLevel.map((p, i) => (
-                        <div
-                            key={i}
-                            onClick={() => onSelectEntity({ type: 'water_level', id: i })}
-                            className={`flex justify-between items-center gap-1 p-1 rounded transition-all cursor-pointer ${selectedEntity?.type === 'water_level' && selectedEntity.id === i ? 'bg-blue-500/10 ring-1 ring-blue-500/50' : ''}`}
-                        >
-                            <div className="flex-1 flex gap-1">
-                                <input
-                                    type="number"
-                                    value={p.x}
-                                    onChange={(e) => handleUpdateWaterX(i, Number(e.target.value))}
-                                    className="flex-1 bg-slate-900 border border-slate-700 text-slate-100 text-[11px] p-1 rounded outline-none focus:border-blue-500"
-                                />
-                                <input
-                                    type="number"
-                                    value={p.y}
-                                    onChange={(e) => handleUpdateWaterY(i, Number(e.target.value))}
-                                    className="flex-1 bg-slate-900 border border-slate-700 text-slate-100 text-[11px] p-1 rounded outline-none focus:border-blue-500"
-                                />
+                <div className="p-3 space-y-2">
+                    {waterLevels.map((wl, i) => (
+                        <div key={wl.id} className="bg-slate-800 rounded border border-slate-700 overflow-hidden">
+                            <div
+                                className="flex items-center justify-between p-2 cursor-pointer hover:bg-slate-750"
+                                onClick={() => setExpandedWaterLevelId(expandedWaterLevelId === wl.id ? null : wl.id)}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <ChevronRight className={`w-3 h-3 text-slate-400 transition-transform ${expandedWaterLevelId === wl.id ? 'rotate-90' : ''}`} />
+                                    <input
+                                        type="text"
+                                        value={wl.name}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={(e) => handleRenameWaterLevel(i, e.target.value)}
+                                        className="bg-transparent text-xs font-medium text-slate-200 focus:outline-none focus:border-b border-blue-500 w-32"
+                                    />
+                                </div>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onDeleteWaterLevel(wl.id); }}
+                                    className="p-1 text-slate-500 hover:text-rose-500 transition-colors"
+                                >
+                                    <Trash className="w-3 h-3" />
+                                </button>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); onDeleteWaterPoint(i); }} className="cursor-pointer p-1.5 text-slate-500 hover:text-rose-500 transition-colors">
-                                <Trash className="w-3.5 h-3.5" />
-                            </button>
+
+                            {expandedWaterLevelId === wl.id && (
+                                <div className="p-2 bg-slate-900/50 border-t border-slate-700 space-y-1">
+                                    <div className="flex px-1 mb-1 text-[10px] text-slate-500">
+                                        <div className="w-1/2">X (m)</div>
+                                        <div className="w-1/2">Y (m)</div>
+                                        <div className="w-6"></div>
+                                    </div>
+                                    {wl.points.map((pt, ptIdx) => (
+                                        <div key={ptIdx} className="flex gap-1 items-center">
+                                            <input
+                                                type="number"
+                                                value={pt.x}
+                                                onChange={(e) => handleUpdateWaterPoint(i, ptIdx, 'x', Number(e.target.value))}
+                                                className="w-1/2 bg-slate-900 border border-slate-700 text-slate-300 text-[10px] px-1 py-0.5 rounded focus:border-blue-500 outline-none"
+                                            />
+                                            <input
+                                                type="number"
+                                                value={pt.y}
+                                                onChange={(e) => handleUpdateWaterPoint(i, ptIdx, 'y', Number(e.target.value))}
+                                                className="w-1/2 bg-slate-900 border border-slate-700 text-slate-300 text-[10px] px-1 py-0.5 rounded focus:border-blue-500 outline-none"
+                                            />
+                                            <button
+                                                onClick={() => handleDeletePointFromWaterLevel(i, ptIdx)}
+                                                className="w-6 flex items-center justify-center text-slate-500 hover:text-rose-500"
+                                            >
+                                                <Trash className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        onClick={() => handleAddPointToWaterLevel(i)}
+                                        className="mt-2 w-full py-1 text-[10px] text-blue-400 hover:text-blue-300 border border-dashed border-blue-500/30 hover:border-blue-500/50 rounded flex items-center justify-center gap-1"
+                                    >
+                                        <Plus className="w-3 h-3" /> Add Point
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     ))}
-                    <div className="flex gap-2">
-                        <button onClick={() => onUpdateWater([...waterLevel, { x: 0, y: 0 }])} className="add-button">+ Add Water Point</button>
-                        <button onClick={onDeleteWaterLevel} className="cursor-pointer p-1.5 text-rose-400 hover:text-rose-300 transition-colors" title="Delete All Water Points">
-                            <Trash className="w-3.5 h-3.5" />
-                        </button>
-                    </div>
+                    <button onClick={handleAddWaterLevelClick} className="add-button">+ New Water Level</button>
                 </div>
             )}
 
+            {/* POINT LOADS */}
             <div className="dropdownlabel">Point Loads
                 <button
                     onClick={() => { setIsLoadOpen(!isLoadOpen) }}
@@ -328,6 +385,7 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
                 </div>
             )}
 
+            {/* LINE LOADS */}
             <div className="dropdownlabel">Line Loads
                 <button
                     onClick={() => { setIsLineLoadOpen(!isLineLoadOpen) }}

@@ -7,6 +7,7 @@ interface StagingSidebarProps {
     polygons: PolygonData[];
     pointLoads: PointLoad[];
     lineLoads: LineLoad[];
+    waterLevels: { id: string; name: string }[]; // NEW
     onPhasesChange: (phases: PhaseRequest[]) => void;
     onSelectPhase: (idx: number) => void;
 }
@@ -17,6 +18,7 @@ export const StagingSidebar: React.FC<StagingSidebarProps> = ({
     polygons,
     pointLoads,
     lineLoads,
+    waterLevels,
     onPhasesChange,
     onSelectPhase
 }) => {
@@ -29,6 +31,7 @@ export const StagingSidebar: React.FC<StagingSidebarProps> = ({
                 if (parent) {
                     ph.active_polygon_indices = [...parent.active_polygon_indices];
                     ph.active_load_ids = [...parent.active_load_ids];
+                    ph.active_water_level_id = parent.active_water_level_id; // NEW
                     // Recurse to handle children of children if any
                     propagateSafetyState(updatedPhases, ph.id);
                 }
@@ -134,6 +137,7 @@ export const StagingSidebar: React.FC<StagingSidebarProps> = ({
                                                 if (parent) {
                                                     updatedPhase.active_polygon_indices = [...parent.active_polygon_indices];
                                                     updatedPhase.active_load_ids = [...parent.active_load_ids];
+                                                    updatedPhase.active_water_level_id = parent.active_water_level_id;
                                                 }
                                             }
 
@@ -162,6 +166,31 @@ export const StagingSidebar: React.FC<StagingSidebarProps> = ({
                                     </select>
                                 </div>
 
+                                <div>
+                                    <label className="itemlabel">Water Level</label>
+                                    <select
+                                        value={p.active_water_level_id || ""}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            const newPhases = [...phases];
+                                            const updatedPhase = { ...p, active_water_level_id: val || undefined };
+                                            newPhases[i] = updatedPhase;
+
+                                            // Propagation for Safety phases if needed, though they usually lock active state. 
+                                            // If we change parent's water level, children might need update if we enforce strict inheritance.
+                                            propagateSafetyState(newPhases, updatedPhase.id);
+
+                                            onPhasesChange(newPhases);
+                                        }}
+                                        className="w-full bg-slate-900/50 text-white border border-white/10 rounded px-2 py-1.5 text-[10px] outline-none hover:bg-slate-900 transition-colors cursor-pointer"
+                                    >
+                                        <option value="">(None)</option>
+                                        {waterLevels && waterLevels.map(wl => (
+                                            <option key={wl.id} value={wl.id}>{wl.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
                                 {i > 0 && (
                                     <div>
                                         <label className="itemlabel">Start from (Parent)</label>
@@ -177,6 +206,7 @@ export const StagingSidebar: React.FC<StagingSidebarProps> = ({
                                                     if (parent) {
                                                         updatedPhase.active_polygon_indices = [...parent.active_polygon_indices];
                                                         updatedPhase.active_load_ids = [...parent.active_load_ids];
+                                                        updatedPhase.active_water_level_id = parent.active_water_level_id;
                                                     }
                                                 }
 
@@ -205,6 +235,7 @@ export const StagingSidebar: React.FC<StagingSidebarProps> = ({
                             parent_id: phases[phases.length - 1].id,
                             active_polygon_indices: [...phases[phases.length - 1].active_polygon_indices],
                             active_load_ids: [...phases[phases.length - 1].active_load_ids],
+                            active_water_level_id: phases[phases.length - 1].active_water_level_id,
                             reset_displacements: false
                         }]);
                     }}
@@ -230,6 +261,31 @@ export const StagingSidebar: React.FC<StagingSidebarProps> = ({
                                     className="w-3 h-3 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-offset-slate-900"
                                 />
                                 <span>Polygon {i + 1} <span className="opacity-50 font-mono text-[10px]">({poly.materialId})</span></span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                <div>
+                    <div className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest">WATER LEVELS</div>
+                    <div className="space-y-2">
+                        {waterLevels && waterLevels.map((wl) => (
+                            <label key={wl.id} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-white transition-colors">
+                                <input
+                                    type="checkbox"
+                                    checked={currentPhase?.active_water_level_id === wl.id}
+                                    onChange={() => {
+                                        const newPhases = [...phases];
+                                        const current = newPhases[currentPhaseIdx];
+                                        const newValue = current.active_water_level_id === wl.id ? undefined : wl.id;
+                                        current.active_water_level_id = newValue;
+
+                                        propagateSafetyState(newPhases, current.id);
+                                        onPhasesChange(newPhases);
+                                    }}
+                                    className="w-3 h-3 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-offset-slate-900"
+                                />
+                                <span>{wl.name}</span>
                             </label>
                         ))}
                     </div>

@@ -9,7 +9,7 @@ import { StagingSidebar } from './component/StagingSidebar';
 import { ResultSidebar } from './component/ResultSidebar';
 import { SAMPLE_MESH_REQUEST, SAMPLE_PHASES, SAMPLE_MATERIALS, SAMPLE_SOLVER_SETTINGS, SAMPLE_GENERAL_SETTINGS, SAMPLE_MESH_SETTINGS } from './sample_data';
 import { api } from './api';
-import { MeshResponse, SolverResponse, PhaseRequest, Material, PolygonData, PointLoad, LineLoad, GeneralSettings, SolverSettings, MeshSettings, StepPoint, ProjectFile, ProjectMetadata, PhaseType } from './types';
+import { MeshResponse, SolverResponse, PhaseRequest, Material, PolygonData, PointLoad, LineLoad, GeneralSettings, SolverSettings, MeshSettings, StepPoint, ProjectFile, ProjectMetadata, PhaseType, WaterLevel } from './types';
 import { MaterialModal } from './component/MaterialModal';
 import { SettingsModal } from './component/SettingsModal';
 import { CloudLoadModal } from './component/CloudLoadModal';
@@ -40,7 +40,7 @@ function MainApp() {
     const [polygons, setPolygons] = useState<PolygonData[]>(SAMPLE_MESH_REQUEST.polygons);
     const [pointLoads, setPointLoads] = useState<PointLoad[]>(SAMPLE_MESH_REQUEST.pointLoads);
     const [lineLoads, setLineLoads] = useState<LineLoad[]>([]);
-    const [waterLevel, setWaterLevel] = useState<{ x: number, y: number }[]>(SAMPLE_MESH_REQUEST.water_level || []);
+    const [waterLevels, setWaterLevels] = useState<WaterLevel[]>(SAMPLE_MESH_REQUEST.water_levels || []); // NEW
     const [phases, setPhases] = useState<PhaseRequest[]>(SAMPLE_PHASES);
     const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(SAMPLE_GENERAL_SETTINGS);
     const [solverSettings, setSolverSettings] = useState<SolverSettings>(SAMPLE_SOLVER_SETTINGS);
@@ -93,7 +93,8 @@ function MainApp() {
                 materials,
                 pointLoads,
                 lineLoads,
-                water_level: waterLevel,
+                water_level: undefined, // Deprecated
+                water_levels: waterLevels, // NEW
                 mesh_settings: meshSettings
             });
             setMeshResponse(result);
@@ -128,7 +129,8 @@ function MainApp() {
                 mesh: meshResponse,
                 settings: solverSettings as any,
                 phases: phases,
-                water_level: waterLevel,
+                water_level: undefined,
+                water_levels: waterLevels, // NEW
                 point_loads: pointLoads,
                 line_loads: lineLoads,
                 materials: materials // NEW
@@ -238,7 +240,12 @@ function MainApp() {
     };
 
     const handleAddWaterLevel = (points: { x: number, y: number }[]) => {
-        setWaterLevel(points);
+        const newWL: WaterLevel = {
+            id: `wl_${Date.now()}`,
+            name: `Water Level ${waterLevels.length + 1}`,
+            points
+        };
+        setWaterLevels([...waterLevels, newWL]);
         setDrawMode(null);
     };
 
@@ -258,14 +265,27 @@ function MainApp() {
         if (selectedEntity?.type === 'load' && selectedEntity.id === id) setSelectedEntity(null);
     };
 
-    const handleDeleteWaterPoint = (idx: number) => {
-        setWaterLevel(waterLevel.filter((_, i) => i !== idx));
-        if (selectedEntity?.type === 'water_level' && selectedEntity.id === idx) setSelectedEntity(null);
+    const handleDeleteWaterPoint = (wlIndex: number, ptIndex: number) => {
+        const next = [...waterLevels];
+        next[wlIndex] = {
+            ...next[wlIndex],
+            points: next[wlIndex].points.filter((_, i) => i !== ptIndex)
+        };
+        setWaterLevels(next);
+        // if (selectedEntity?.type === 'water_level' && selectedEntity.id === idx) setSelectedEntity(null);
     };
 
-    const handleDeleteWaterLevel = () => {
-        setWaterLevel([]);
-        if (selectedEntity?.type === 'water_level') setSelectedEntity(null);
+    const handleDeleteWaterLevel = (id: string) => {
+        if (confirm("Delete this water level?")) {
+            setWaterLevels(waterLevels.filter(wl => wl.id !== id));
+            if (selectedEntity?.type === 'water_level' && selectedEntity.id === id) setSelectedEntity(null);
+        }
+    };
+
+    const handleUpdateWaterLevel = (index: number, newWL: WaterLevel) => {
+        const next = [...waterLevels];
+        next[index] = newWL;
+        setWaterLevels(next);
     };
 
     const handleSaveProject = () => {
@@ -325,7 +345,21 @@ function MainApp() {
                 setPolygons(projectData.polygons || []);
                 setPointLoads(projectData.pointLoads || []);
                 setLineLoads(projectData.lineLoads || []);
-                setWaterLevel(projectData.waterLevel || []);
+
+                // Migration Logic for Water Levels
+                if (projectData.waterLevels) {
+                    setWaterLevels(projectData.waterLevels);
+                } else if (projectData.waterLevel && projectData.waterLevel.length > 0) {
+                    // Migrate old single water level to list
+                    setWaterLevels([{
+                        id: 'wl_legacy',
+                        name: 'Default Water Level',
+                        points: projectData.waterLevel
+                    }]);
+                } else {
+                    setWaterLevels([]);
+                }
+
                 setPhases(projectData.phases || SAMPLE_PHASES);
                 setGeneralSettings(projectData.generalSettings || SAMPLE_GENERAL_SETTINGS);
                 setSolverSettings(projectData.solverSettings || SAMPLE_SOLVER_SETTINGS);
@@ -431,7 +465,21 @@ function MainApp() {
             setPolygons(projectData.polygons || []);
             setPointLoads(projectData.pointLoads || []);
             setLineLoads(projectData.lineLoads || []);
-            setWaterLevel(projectData.waterLevel || []);
+
+            // Migration Logic for Water Levels
+            if (projectData.waterLevels) {
+                setWaterLevels(projectData.waterLevels);
+            } else if (projectData.waterLevel && projectData.waterLevel.length > 0) {
+                // Migrate old single water level to list
+                setWaterLevels([{
+                    id: 'wl_legacy',
+                    name: 'Default Water Level',
+                    points: projectData.waterLevel
+                }]);
+            } else {
+                setWaterLevels([]);
+            }
+
             setPhases(projectData.phases || SAMPLE_PHASES);
             setGeneralSettings(projectData.generalSettings || SAMPLE_GENERAL_SETTINGS);
             setSolverSettings(projectData.solverSettings || SAMPLE_SOLVER_SETTINGS);
@@ -584,17 +632,17 @@ function MainApp() {
                                         polygons={polygons}
                                         pointLoads={pointLoads}
                                         lineLoads={lineLoads}
-                                        waterLevel={waterLevel}
+                                        waterLevels={waterLevels} // NEW
                                         onUpdateMaterials={setMaterials}
                                         onUpdatePolygons={setPolygons}
                                         onUpdateLoads={setPointLoads}
                                         onUpdateLineLoads={setLineLoads}
-                                        onUpdateWater={setWaterLevel}
+                                        onAddWaterLevel={handleAddWaterLevel} // NEW
+                                        onUpdateWaterLevel={handleUpdateWaterLevel} // NEW
                                         onEditMaterial={setEditingMaterial}
                                         onDeleteMaterial={handleDeleteMaterial}
                                         onDeletePolygon={handleDeletePolygon}
                                         onDeleteLoad={handleDeleteLoad}
-                                        onDeleteWaterPoint={handleDeleteWaterPoint}
                                         onDeleteWaterLevel={handleDeleteWaterLevel}
                                         selectedEntity={selectedEntity}
                                         onSelectEntity={setSelectedEntity}
@@ -607,17 +655,17 @@ function MainApp() {
                                     polygons={polygons}
                                     pointLoads={pointLoads}
                                     lineLoads={lineLoads}
-                                    waterLevel={waterLevel}
+                                    waterLevels={waterLevels} // NEW
                                     onUpdateMaterials={setMaterials}
                                     onUpdatePolygons={setPolygons}
                                     onUpdateLoads={setPointLoads}
                                     onUpdateLineLoads={setLineLoads}
-                                    onUpdateWater={setWaterLevel}
+                                    onAddWaterLevel={handleAddWaterLevel} // NEW
+                                    onUpdateWaterLevel={handleUpdateWaterLevel} // NEW
                                     onEditMaterial={setEditingMaterial}
                                     onDeleteMaterial={handleDeleteMaterial}
                                     onDeletePolygon={handleDeletePolygon}
                                     onDeleteLoad={handleDeleteLoad}
-                                    onDeleteWaterPoint={handleDeleteWaterPoint}
                                     onDeleteWaterLevel={handleDeleteWaterLevel}
                                     selectedEntity={selectedEntity}
                                     onSelectEntity={setSelectedEntity}
@@ -669,6 +717,7 @@ function MainApp() {
                                         polygons={polygons}
                                         pointLoads={pointLoads}
                                         lineLoads={lineLoads}
+                                        waterLevels={waterLevels} // NEW
                                         onPhasesChange={setPhases}
                                         onSelectPhase={setCurrentPhaseIdx}
                                     />
@@ -681,6 +730,7 @@ function MainApp() {
                                     polygons={polygons}
                                     pointLoads={pointLoads}
                                     lineLoads={lineLoads}
+                                    waterLevels={waterLevels} // NEW
                                     onPhasesChange={setPhases}
                                     onSelectPhase={setCurrentPhaseIdx}
                                 />
@@ -696,7 +746,7 @@ function MainApp() {
                             pointLoads={pointLoads}
                             lineLoads={lineLoads}
                             materials={materials}
-                            water_level={waterLevel}
+                            water_levels={waterLevels} // NEW
                             drawMode={drawMode}
                             onAddPolygon={handleAddPolygon}
                             onAddPointLoad={handleAddPointLoad}
@@ -707,9 +757,9 @@ function MainApp() {
                             onSelectEntity={setSelectedEntity}
                             onDeletePolygon={handleDeletePolygon}
                             onDeleteLoad={handleDeleteLoad}
-                            onDeleteWaterPoint={handleDeleteWaterPoint}
                             onDeleteWaterLevel={handleDeleteWaterLevel}
                             onUpdatePolygon={handleUpdatePolygon}
+                            onUpdateWaterLevel={handleUpdateWaterLevel} // NEW
                             activeTab={activeTab}
                             currentPhaseType={currentPhase?.phase_type}
                             generalSettings={generalSettings}
@@ -722,9 +772,10 @@ function MainApp() {
                             pointLoads={pointLoads}
                             lineLoads={lineLoads}
                             materials={materials}
-                            water_level={waterLevel}
+                            water_levels={waterLevels} // NEW
                             activePolygonIndices={currentPhase?.active_polygon_indices}
                             activeLoadIds={currentPhase?.active_load_ids}
+                            activeWaterLevelId={currentPhase?.active_water_level_id} // NEW
                             drawMode={null}
                             onAddPolygon={() => { }}
                             onAddPointLoad={() => { }}
@@ -735,7 +786,6 @@ function MainApp() {
                             onSelectEntity={() => { }}
                             onDeletePolygon={() => { }}
                             onDeleteLoad={() => { }}
-                            onDeleteWaterPoint={() => { }}
                             onDeleteWaterLevel={() => { }}
                             onToggleActive={handleToggleActive}
                             onUpdatePolygon={handleUpdatePolygon}
@@ -744,6 +794,7 @@ function MainApp() {
                             generalSettings={generalSettings}
                             materialOverrides={currentPhase?.material_overrides}
                             onOverrideMaterial={handleOverrideMaterial}
+                            onUpdateWaterLevel={() => { }}
                         />
                     )}
 

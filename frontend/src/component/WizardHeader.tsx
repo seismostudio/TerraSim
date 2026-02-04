@@ -1,4 +1,4 @@
-import { Settings, Folder, Square, ArrowDownToDot, Pen, ChartNoAxesColumnIncreasing, ChartNoAxesColumnDecreasing, LogOut, ArrowDown, Bell, Calendar, ChevronRight, Save, FolderOpen, ArrowDownToLine, CloudUpload, CloudDownload, Loader2, Book, ChevronDown, MessageSquare } from 'lucide-react';
+import { Settings, Folder, Square, ArrowDownToDot, Pen, ChartNoAxesColumnIncreasing, ChartNoAxesColumnDecreasing, LogOut, ArrowDown, Bell, Calendar, ChevronRight, Save, FolderOpen, ArrowDownToLine, CloudUpload, CloudDownload, Loader2, Book, ChevronDown, MessageSquare, AlignHorizontalSpaceAround } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { APP_VERSION } from '../version';
 import { SOFTWARE_UPDATES } from '../data/updates';
@@ -362,6 +362,17 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
                             <ChartNoAxesColumnDecreasing className='absolute bottom-2.5 right-1 w-5 h-5 rotate-90' />
                             <Pen className='absolute top-1 -right-1 w-3 h-3' />
                         </button>
+                        {/* Next for Plate Implementation */}
+                        {/* <button
+                            onClick={() => onDrawModeChange(drawMode === 'line_load' ? null : 'line_load')}
+                            title="Draw Structural Plate"
+                            className={`cursor-pointer w-10 relative py-2 px-2 text-sm text-white transition-all border-b-2 h-full ${drawMode === 'line_load' ? 'text-blue-500 border-blue-500 font-bold rounded-t-lg bg-blue-600/20' : 'text-slate-400 border-transparent hover:text-slate-300'}`}
+                        >
+                            <div className="relative">
+                                <AlignHorizontalSpaceAround className='w-5 h-5 rotate-90' />
+                                <Pen className='absolute -top-1 -right-1 w-3 h-3' />
+                            </div>
+                        </button> */}
                     </div>
                 )}
             </div>

@@ -3,6 +3,12 @@ export interface Point {
     y: number;
 }
 
+export interface WaterLevel {
+    id: string;
+    name: string;
+    points: Point[];
+}
+
 export interface PolygonData {
     vertices: Point[];
     mesh_size?: number;
@@ -83,7 +89,8 @@ export interface MeshRequest {
     materials: Material[];
     pointLoads: PointLoad[];
     lineLoads?: LineLoad[];
-    water_level?: Point[];
+    water_level?: Point[]; // Deprecated
+    water_levels?: WaterLevel[]; // NEW
     mesh_settings?: MeshSettings; // NEW: Global mesh settings
 }
 
@@ -102,7 +109,8 @@ export interface ProjectFile {
     polygons: PolygonData[];
     pointLoads: PointLoad[];
     lineLoads: LineLoad[];
-    waterLevel: { x: number, y: number }[];
+    waterLevel: { x: number, y: number }[]; // Deprecated, keep for old file compat loading
+    waterLevels: WaterLevel[]; // NEW
     phases: PhaseRequest[];
     generalSettings: GeneralSettings;
     solverSettings: SolverSettings;
@@ -174,6 +182,7 @@ export interface PhaseRequest {
     active_load_ids: string[];
     reset_displacements?: boolean;
     material_overrides?: Record<number, string>; // polygon_index -> material_id
+    active_water_level_id?: string; // NEW
 }
 
 export interface SolverRequest {
@@ -181,6 +190,7 @@ export interface SolverRequest {
     phases: PhaseRequest[]; // Sequence of phases
     settings?: SolverSettings;
     water_level?: Point[];
+    water_levels?: WaterLevel[]; // NEW
     point_loads?: PointLoad[]; // Definitions
     line_loads?: LineLoad[];
     materials?: Material[]; // NEW: Material library for overrides

@@ -221,7 +221,7 @@ def solve_phases(request: SolverRequest, should_stop=None):
         validation_errors.append(get_error_info(ErrorCode.VAL_MAX_STEPS_OOB))
     if (settings.min_desired_iterations or 0) > (settings.max_desired_iterations or 100):
          validation_errors.append(get_error_info(ErrorCode.VAL_ITER_MISMATCH))
-    if len(mesh.elements) > 4000:
+    if len(mesh.elements) > 10000:
         validation_errors.append(get_error_info(ErrorCode.VAL_OVER_ELEMENT_LIMIT))
 
     if validation_errors:
@@ -250,9 +250,22 @@ def solve_phases(request: SolverRequest, should_stop=None):
     elem_props_all = [] # List of all possible elements
     
     # Process water level polyline: convert Points to Dicts if necessary
-    water_level_data = None
+    # Process water level polyline: convert Points to Dicts
+    # NEW: Map ID -> List[Dict]
+    water_levels_map = {}
+    if request.water_levels:
+        for wl in request.water_levels:
+            water_levels_map[wl.id] = [{"x": p.x, "y": p.y} for p in wl.points]
+    
+    # Fallback to legacy `water_level` if no `water_levels` or as a default "global" one
+    # If legacy `water_level` exists and no `water_levels` are defined, treat it as a default.
+    default_water_level = None
     if request.water_level:
-        water_level_data = [{"x": p.x, "y": p.y} for p in request.water_level]
+        default_water_level = [{"x": p.x, "y": p.y} for p in request.water_level]
+    
+    # Track current water level to detect changes
+    current_water_level_data = default_water_level
+    current_water_level_id = "default_legacy"
 
     # Pre-calculate all element matrices (Initial state) - T6 Elements
     for i, elem_nodes in enumerate(elements):
@@ -270,7 +283,8 @@ def solve_phases(request: SolverRequest, should_stop=None):
             continue
             
         coords = np.array([nodes[n] for n in elem_nodes])  # (6, 2)
-        K_el, F_grav, gauss_point_data, D = compute_element_matrices_t6(coords, mat, water_level=water_level_data)
+        # Use initial/default water level for first pass
+        K_el, F_grav, gauss_point_data, D = compute_element_matrices_t6(coords, mat, water_level=default_water_level)
         
         if K_el is None: continue
         
@@ -315,28 +329,74 @@ def solve_phases(request: SolverRequest, should_stop=None):
         yield {"type": "log", "content": msg_start}
         print(msg_start)
 
+        # 0.1 Determine Active Water Level for this Phase
+        # Inheritance logic:
+        # If Safety Analysis -> Must inherit from Parent Phase (unless we allow overriding? Usually safety uses same state)
+        # Actually, PhaseRequest might have active_water_level_id.
+        phase_water_level_data = current_water_level_data # Default to previous
+        phase_water_level_id = current_water_level_id
+
+        if phase.phase_type == PhaseType.SAFETY_ANALYSIS:
+            # Safety analysis usually implies NO change in boundary conditions (loads, water) from parent.
+            # So we keep `current_water_level_data` as is from the previous loop iteration (which was the parent).
+            pass 
+        else:
+            # Check if this phase specifies a water level
+            if phase.active_water_level_id:
+                if phase.active_water_level_id in water_levels_map:
+                    phase_water_level_data = water_levels_map[phase.active_water_level_id]
+                    phase_water_level_id = phase.active_water_level_id
+                else:
+                    log.append(f"WARNING: Water Level ID '{phase.active_water_level_id}' not found. Using previous level.")
+            else:
+                # If None, what does it mean? "No Water" or "Keep Previous"?
+                # Usually "Keep Previous" in staged construction unless explicitly set to "None" (which we might handle with special ID?)
+                # For now, assume "Keep Previous"
+                pass
+        
+        # Check for Water Level Change
+        water_level_changed = (phase_water_level_id != current_water_level_id)
+        if water_level_changed or phase_idx == 0: # Always set on first phase to be sure
+             if water_level_changed:
+                 msg_wl = f"Water Level changed to '{phase_water_level_id}'"
+                 log.append(msg_wl)
+                 yield {"type": "log", "content": msg_wl}
+             current_water_level_data = phase_water_level_data
+             current_water_level_id = phase_water_level_id
+
         # 0. RESET MATERIAL STATE (Fix for persistence bug)
         # For non-Safety Analysis phases, revert elements to their original material first.
-        # This prevents overrides from previous phases leaking into future phases.
-        # Safety Analysis phases MUST inherit the material state (including overrides) from their parent phase.
         if phase.phase_type != PhaseType.SAFETY_ANALYSIS:
             reset_count = 0
             for ep in elem_props_all:
-                if ep['material'].id != ep['original_material'].id:
-                    orig_mat = ep['original_material']
-                    # Recompute Element Matrices with ORIGINAL material
+                # Condition to recompute: 
+                # 1. Material differs from original (revert override)
+                # 2. OR Water Level changed (need to update Density & PWP)
+                # Note: valid check: `ep['material'].id != ep['original_material'].id` covers material overrides.
+                # But if water level changed, we MUST recompute even if material is same.
+                
+                needs_update = False
+                target_mat = ep['original_material']
+                
+                if ep['material'].id != target_mat.id:
+                    needs_update = True
+                
+                if water_level_changed:
+                    needs_update = True
+
+                if needs_update:
                     coords = np.array([nodes[n] for n in ep['nodes']])
-                    K_el, F_grav, gauss_point_data, D = compute_element_matrices_t6(coords, orig_mat, water_level=water_level_data)
+                    K_el, F_grav, gauss_point_data, D = compute_element_matrices_t6(coords, target_mat, water_level=current_water_level_data)
                     
                     if K_el is not None:
                         ep['K'] = K_el
                         ep['F_grav'] = F_grav
                         ep['D'] = D
-                        ep['material'] = orig_mat
+                        ep['material'] = target_mat
                         ep['gauss_points'] = gauss_point_data
                         reset_count += 1
             if reset_count > 0:
-                msg_reset = f"Reset {reset_count} elements to original material."
+                msg_reset = f"Updated {reset_count} elements (Material Reset / Water Level Update)."
                 log.append(msg_reset)
                 yield {"type": "log", "content": msg_reset}
         
@@ -375,9 +435,9 @@ def solve_phases(request: SolverRequest, should_stop=None):
                 print(msg_override)
                 
                 for ep in affected_eps:
-                    # Recompute Element Matrices with NEW material
+                    # Recompute Element Matrices with NEW material AND Current Water Level
                     coords = np.array([nodes[n] for n in ep['nodes']])
-                    K_el, F_grav, gauss_point_data, D = compute_element_matrices_t6(coords, new_mat, water_level=water_level_data)
+                    K_el, F_grav, gauss_point_data, D = compute_element_matrices_t6(coords, new_mat, water_level=current_water_level_data)
                     
                     if K_el is not None:
                         ep['K'] = K_el
@@ -407,7 +467,7 @@ def solve_phases(request: SolverRequest, should_stop=None):
             print(msg_k0)
             
             # T6 K0 Procedure returns stress per Gauss point
-            k0_stresses = compute_vertical_stress_k0_t6(active_elem_props, nodes, water_level_data)
+            k0_stresses = compute_vertical_stress_k0_t6(active_elem_props, nodes, current_water_level_data)
             
             # Update global state
             for eid, gp_stresses in k0_stresses.items():

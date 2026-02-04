@@ -1,4 +1,4 @@
-import { DrainageType, MaterialModel, MeshRequest, SolverSettings, PhaseRequest, PhaseType, MeshSettings } from './types';
+import { DrainageType, MaterialModel, MeshRequest, SolverSettings, PhaseRequest, PhaseType, MeshSettings, WaterLevel } from './types';
 
 // Sample Materials
 export const SAMPLE_MATERIALS = [
@@ -235,6 +235,16 @@ export const SAMPLE_MESH_REQUEST: MeshRequest = {
         { x: -10, y: 2 },
         { x: 10, y: 2 }
     ],
+    water_levels: [
+        {
+            id: 'wl_default',
+            name: 'Initial Water Level',
+            points: [
+                { x: -10, y: 2 },
+                { x: 10, y: 2 }
+            ]
+        }
+    ],
     mesh_settings: SAMPLE_MESH_SETTINGS
 };
 
@@ -286,6 +296,7 @@ export const SAMPLE_PHASES: PhaseRequest[] = [
         phase_type: PhaseType.K0_PROCEDURE,
         active_polygon_indices: [0, 1], // Bottom soil and structures
         active_load_ids: [],
+        active_water_level_id: 'wl_default',
         reset_displacements: false
     },
     {

@@ -6,6 +6,11 @@ class Point(BaseModel):
     x: float
     y: float
 
+class WaterLevel(BaseModel):
+    id: str
+    name: str
+    points: List[Point]
+
 class PolygonData(BaseModel):
     vertices: List[Point]
     mesh_size: Optional[float] = None
@@ -82,7 +87,8 @@ class MeshRequest(BaseModel):
     pointLoads: List[PointLoad]
     lineLoads: Optional[List[LineLoad]] = []
     mesh_settings: Optional[MeshSettings] = MeshSettings()
-    water_level: Optional[List[Point]] = None
+    water_level: Optional[List[Point]] = None # Deprecated, keep for compat
+    water_levels: Optional[List[WaterLevel]] = [] # NEW
 
 class BoundaryCondition(BaseModel):
     node: int  # 1-based index usually for FE, but typically backend sends 0-based for arrays. 
@@ -142,13 +148,15 @@ class PhaseRequest(BaseModel):
     active_polygon_indices: List[int] # Indices of polygons in original MeshRequest
     active_load_ids: List[str] # IDs of point/line loads to activate
     reset_displacements: bool = False # If true, reset total displacement visualization
-    material_overrides: Optional[Dict[int, str]] = None # NEW: Map polygon_index -> material_id
+    material_overrides: Optional[Dict[int, str]] = None # Map polygon_index -> material_id
+    active_water_level_id: Optional[str] = None # NEW
 
 class SolverRequest(BaseModel):
     mesh: MeshResponse
     phases: List[PhaseRequest] # Sequence of phases
     settings: Optional[SolverSettings] = SolverSettings()
     water_level: Optional[List[Point]] = None
+    water_levels: Optional[List[WaterLevel]] = [] # NEW
     point_loads: Optional[List[PointLoad]] = [] # Definitions of load vectors
     line_loads: Optional[List[LineLoad]] = []
     materials: List[Material] = [] # NEW: Library of all available materials

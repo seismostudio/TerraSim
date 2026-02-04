@@ -294,6 +294,7 @@ const MeshResult = ({
             }> = [];
 
             let activeElemInOrderIdx = 0;
+            let rawMin = Infinity, rawMax = -Infinity; // Range for Legend (Pure values)
 
             polygonGroups.forEach((elemIndices, polyId) => {
                 const localVals = groupNodeValues.get(polyId)!;
@@ -349,10 +350,16 @@ const MeshResult = ({
                         const avgVal = (v1 + v2 + v3) / 3;
                         triangleData.push({ p1, p2, p3, avgVal });
 
-                        // Update min/max based on averaged values
+                        // Update min/max based on AVERAGED values for coloring (Smooth Look)
                         if (outputType !== OutputType.YIELD_STATUS) {
                             if (avgVal < min) min = avgVal;
                             if (avgVal > max) max = avgVal;
+
+                            // Update rawMin/rawMax based on RAW values for Legend (Accurate Extremes)
+                            const triMin = Math.min(v1, v2, v3);
+                            const triMax = Math.max(v1, v2, v3);
+                            if (triMin < rawMin) rawMin = triMin;
+                            if (triMax > rawMax) rawMax = triMax;
                         }
                     };
 
@@ -385,6 +392,7 @@ const MeshResult = ({
 
             if (min === Infinity) { min = 0; max = 0; }
             if (min === max) max = min + 1e-9;
+            if (rawMin === Infinity) { rawMin = 0; rawMax = 0; } // Fallback for raw
 
             // PASS 2: Render all triangles with normalized colors
             let vPtr = 0;
@@ -416,6 +424,7 @@ const MeshResult = ({
                         if (outputType === OutputType.YIELD_STATUS) {
                             rgb = [mColor.r, mColor.g, mColor.b];
                         } else {
+                            // Use AVERAGED min/max for smooth coloring (as requested)
                             const norm = (tri.avgVal - min) / (max - min);
                             rgb = outputType === OutputType.DEFORMED_CONTOUR ? getJetColor(norm) : getStressColor(norm);
                         }
@@ -450,7 +459,7 @@ const MeshResult = ({
                 indices: new Uint32Array(0),
                 colors: col,
                 wireframePositions: wfPos,
-                rangeData: { min, max, label: currentLabel }
+                rangeData: { min: rawMin, max: rawMax, label: currentLabel } // Use RAW range for Legend
             };
         }
     }, [mesh, solverResult, currentPhaseIdx, phases, deformationScale, outputType, ignorePhases, materials]);

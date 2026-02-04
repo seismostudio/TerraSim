@@ -80,19 +80,19 @@ export const Ruler: React.FC<RulerProps> = ({ generalSettings }) => {
         <group>
             {/* Horizontal Axis Bar */}
             <Line
-                points={[[view.left, horizontalRulerY, 0.9], [view.right, horizontalRulerY, 0.9]]}
+                points={[[view.left, horizontalRulerY, 10], [view.right, horizontalRulerY, 10]]}
                 color={rulerColor}
                 lineWidth={2}
             />
             {xTicks.map(x => (
                 <group key={`x-${x}`}>
                     <Line
-                        points={[[x, horizontalRulerY, 0.9], [x, horizontalRulerY - tickLen, 0.9]]}
+                        points={[[x, horizontalRulerY, 10], [x, horizontalRulerY - tickLen, 10]]}
                         color={rulerColor}
                         lineWidth={2}
                     />
                     <Text
-                        position={[x, horizontalRulerY - tickLen * 1.5, 0.9]}
+                        position={[x, horizontalRulerY - tickLen * 1.5, 10]}
                         fontSize={labelSize}
                         color={rulerColor}
                         anchorX="center"
@@ -105,19 +105,19 @@ export const Ruler: React.FC<RulerProps> = ({ generalSettings }) => {
 
             {/* Vertical Axis Bar */}
             <Line
-                points={[[verticalRulerX, view.bottom, 0.9], [verticalRulerX, view.top, 0.9]]}
+                points={[[verticalRulerX, view.bottom, 10], [verticalRulerX, view.top, 10]]}
                 color={rulerColor}
                 lineWidth={2}
             />
             {yTicks.map(y => (
                 <group key={`y-${y}`}>
                     <Line
-                        points={[[verticalRulerX, y, 0.9], [verticalRulerX - tickLen, y, 0.9]]}
+                        points={[[verticalRulerX, y, 10], [verticalRulerX - tickLen, y, 10]]}
                         color={rulerColor}
                         lineWidth={2}
                     />
                     <Text
-                        position={[verticalRulerX - tickLen * 1.5, y, 0.9]}
+                        position={[verticalRulerX - tickLen * 1.5, y, 10]}
                         fontSize={labelSize}
                         color={rulerColor}
                         anchorX="right"
