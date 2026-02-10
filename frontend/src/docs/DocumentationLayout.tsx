@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom';
-import { Book, ChevronRight, Menu, X, BookOpen, User, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Menu, X, BookOpen, User, ArrowLeft } from 'lucide-react';
 import { APP_VERSION } from '../version';
 
 export const DocumentationLayout: React.FC = () => {

@@ -1,4 +1,4 @@
-import { Settings, Folder, Square, ArrowDownToDot, Pen, ChartNoAxesColumnIncreasing, ChartNoAxesColumnDecreasing, LogOut, ArrowDown, Bell, Calendar, ChevronRight, Save, FolderOpen, ArrowDownToLine, CloudUpload, CloudDownload, Loader2, Book, ChevronDown, MessageSquare, AlignHorizontalSpaceAround } from 'lucide-react';
+import { Settings, Folder, Square, ArrowDownToDot, Pen, ChartNoAxesColumnIncreasing, ChartNoAxesColumnDecreasing, LogOut, ArrowDown, Bell, Calendar, ChevronRight, Save, FolderOpen, ArrowDownToLine, CloudUpload, CloudDownload, Loader2, Book, ChevronDown, MessageSquare } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { APP_VERSION } from '../version';

@@ -1,4 +1,4 @@
-import { DrainageType, MaterialModel, MeshRequest, SolverSettings, PhaseRequest, PhaseType, MeshSettings, WaterLevel } from './types';
+import { DrainageType, MaterialModel, MeshRequest, SolverSettings, PhaseRequest, PhaseType, MeshSettings } from './types';
 
 // Sample Materials
 export const SAMPLE_MATERIALS = [

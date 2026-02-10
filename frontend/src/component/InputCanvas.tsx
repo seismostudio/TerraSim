@@ -346,7 +346,7 @@ export const InputCanvas: React.FC<InputCanvasProps> = ({
     activePolygonIndices, activeLoadIds, activeWaterLevelId,
     drawMode, onAddPolygon, onAddPointLoad, onAddLineLoad, onAddWaterLevel, onCancelDraw,
     selectedEntity, onSelectEntity, onDeletePolygon, onDeleteLoad, onDeleteWaterLevel, onToggleActive,
-    onUpdatePolygon, onUpdateWaterLevel,
+    onUpdatePolygon,
     activeTab,
     currentPhaseType,
     generalSettings,
