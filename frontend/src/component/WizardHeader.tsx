@@ -1,5 +1,6 @@
 import { Settings, Folder, Square, ArrowDownToDot, Pen, ChartNoAxesColumnIncreasing, ChartNoAxesColumnDecreasing, LogOut, ArrowDown, Bell, Calendar, ChevronRight, Save, FolderOpen, ArrowDownToLine, CloudUpload, CloudDownload, Loader2, Book, ChevronDown, MessageSquare, AlignHorizontalSpaceAround } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { APP_VERSION } from '../version';
 import { SOFTWARE_UPDATES } from '../data/updates';
 import { useAuth } from '../context/AuthContext';
@@ -249,9 +250,9 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
                             className={`cursor-pointer p-2.5 rounded-xl hover:bg-slate-700/50 transition-all text-slate-400 hover:text-blue-400 group relative active:scale-95`}
                             title="Documentation"
                         >
-                            <a href="https://docs.daharengineer.com" target="_blank" rel="noopener noreferrer">
+                            <Link to="/docs" target="_blank" rel="noopener noreferrer">
                                 <Book className={`w-5 h-5`} />
-                            </a>
+                            </Link>
                         </button>
                         <button
                             onClick={onOpenSettings}
@@ -446,8 +447,8 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
                     </label>
                 </div>
                 <div className="flex flex-col items-center gap-2 px-3 py-2 w-full border-b border-slate-700">
-                    <a
-                        href="https://docs.daharengineer.com"
+                    <Link
+                        to="/docs"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-2 px-3 py-1.5 w-full bg-blue-800/20 rounded-xl border-b border-slate-700">
@@ -455,7 +456,7 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
                         <div className="flex flex-col items-end py-4">
                             <span className="text-xs font-semibold text-white leading-none">Documentation</span>
                         </div>
-                    </a>
+                    </Link>
                     <button
                         onClick={onOpenFeedback}
                         className="flex items-center gap-2 px-3 py-1.5 w-full bg-blue-800/20 rounded-xl border-b border-slate-700">

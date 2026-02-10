@@ -15,11 +15,13 @@ interface InputSidebarProps {
     onUpdateLineLoads: (l: LineLoad[]) => void;
     onAddWaterLevel: (points: { x: number, y: number }[]) => void; // NEW
     onUpdateWaterLevel: (index: number, wl: WaterLevel) => void; // NEW
+    onUpdatePolygonPoints: (index: number, points: { x: number, y: number }[]) => void; // NEW
     onEditMaterial: (mat: Material) => void;
     onDeleteMaterial: (id: string) => void;
     onDeletePolygon: (idx: number) => void;
     onDeleteLoad: (id: string) => void;
     onDeleteWaterLevel: (id: string) => void;
+    onDeleteWaterPoint: (wlIndex: number, ptIndex: number) => void; // NEW
     selectedEntity: { type: string, id: string | number } | null;
     onSelectEntity: (selection: { type: string, id: string | number } | null) => void;
 }
@@ -36,11 +38,13 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
     onUpdateLineLoads,
     onAddWaterLevel,
     onUpdateWaterLevel,
+    onUpdatePolygonPoints,
     onEditMaterial,
     onDeleteMaterial,
     onDeletePolygon,
     onDeleteLoad,
     onDeleteWaterLevel,
+    onDeleteWaterPoint,
     selectedEntity,
     onSelectEntity
 }) => {
@@ -117,14 +121,20 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
 
     const handleDeletePointFromWaterLevel = (wlIndex: number, ptIndex: number) => {
         const wl = waterLevels[wlIndex];
-        if (wl.points.length <= 1) return; // Prevent deleting last point? Or allow empty?
-        const newPoints = wl.points.filter((_, i) => i !== ptIndex);
-        onUpdateWaterLevel(wlIndex, { ...wl, points: newPoints });
+        if (wl.points.length <= 1) return;
+        onDeleteWaterPoint(wlIndex, ptIndex);
     };
 
     const handleRenameWaterLevel = (wlIndex: number, newName: string) => {
         const wl = waterLevels[wlIndex];
         onUpdateWaterLevel(wlIndex, { ...wl, name: newName });
+    };
+
+    const handleUpdatePolygonPoint = (polyIndex: number, ptIndex: number, field: 'x' | 'y', value: number) => {
+        const poly = polygons[polyIndex];
+        const newPoints = [...poly.vertices];
+        newPoints[ptIndex] = { ...newPoints[ptIndex], [field]: value };
+        onUpdatePolygonPoints(polyIndex, newPoints);
     };
 
     const [isMaterialOpen, setIsMaterialOpen] = useState(true);
@@ -133,6 +143,7 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
     const [isLineLoadOpen, setIsLineLoadOpen] = useState(true);
     const [isWaterOpen, setIsWaterOpen] = useState(true);
     const [expandedWaterLevelId, setExpandedWaterLevelId] = useState<string | null>(null);
+    const [expandedPolygonId, setExpandedPolygonId] = useState<number | null>(null);
 
 
     return (
@@ -213,6 +224,13 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
                                         {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                     </select>
                                     <button
+                                        onClick={(e) => { e.stopPropagation(); setExpandedPolygonId(i); }}
+                                        className="cursor-pointer p-1.5 rounded hover:bg-blue-500/20 hover:text-blue-500 transition-colors"
+                                        title="Edit Point"
+                                    >
+                                        <Pencil className='w-3.5 h-3.5' />
+                                    </button>
+                                    <button
                                         onClick={(e) => { e.stopPropagation(); onDeletePolygon(i); }}
                                         className="cursor-pointer p-1.5 rounded hover:bg-rose-500/20 hover:text-rose-500 transition-colors"
                                         title="Delete Polygon"
@@ -221,6 +239,38 @@ export const InputSidebar: React.FC<InputSidebarProps> = ({
                                     </button>
                                 </div>
                             </div>
+                            {expandedPolygonId === i && (
+                                <div className="p-3 gap-2">
+                                    {polygons[i].vertices.map((v, j) => (
+                                        <div className='flex gap-2 items-center'>
+                                            <div className='text-xs'>
+                                                x :
+                                            </div>
+                                            <div className="">
+                                                <input
+                                                    key={j}
+                                                    type="number"
+                                                    value={v.x}
+                                                    onChange={(e) => handleUpdatePolygonPoint(i, j, 'x', Number(e.target.value))}
+                                                    className="cursor-pointer bg-slate-900 border border-slate-700 text-[10px] px-1 py-0.5 rounded text-slate-100 outline-none focus:border-blue-500"
+                                                />
+                                            </div>
+                                            <div className='text-xs'>
+                                                y :
+                                            </div>
+                                            <div className="">
+                                                <input
+                                                    key={j}
+                                                    type="number"
+                                                    value={v.y}
+                                                    onChange={(e) => handleUpdatePolygonPoint(i, j, 'y', Number(e.target.value))}
+                                                    className="cursor-pointer bg-slate-900 border border-slate-700 text-[10px] px-1 py-0.5 rounded text-slate-100 outline-none focus:border-blue-500"
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>

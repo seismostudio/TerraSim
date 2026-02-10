@@ -70,3 +70,7 @@ body {
 .input:focus {
   @apply border-blue-500;
 }
+
+.description2 {
+  @apply text-sm text-slate-300 leading-relaxed mb-2 font-normal;
+}

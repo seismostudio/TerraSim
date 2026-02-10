@@ -652,11 +652,6 @@ export const OutputCanvas: React.FC<OutputCanvasProps> = ({
                                     onChange={(e) => setSliderValue(Number(e.target.value))}
                                     className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                                 />
-                                <div className="md:block hidden flex justify-between mt-1 px-0.5">
-                                    <span className="text-[8px]">1x</span>
-                                    <span className="text-[8px]">50x</span>
-                                    <span className="text-[8px]">100x</span>
-                                </div>
                             </div>
                         )}
 

@@ -1,5 +1,10 @@
 import { useState } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
+import { DocumentationLayout } from './docs/DocumentationLayout';
+import { Introduction } from './docs/Introduction';
+import { UserManual } from './docs/UserManual';
+import { ScientificReference } from './docs/ScientificReference';
 import { InputCanvas } from './component/InputCanvas';
 import { OutputCanvas } from './component/OutputCanvas';
 import { WizardHeader, WizardTab } from './component/WizardHeader';
@@ -217,6 +222,10 @@ function MainApp() {
         setPolygons(newPolys);
     };
 
+    const handleUpdatePolygonPoints = (idx: number, points: { x: number, y: number }[]) => {
+        handleUpdatePolygon(idx, { vertices: points });
+    };
+
     const handleAddPointLoad = (x: number, y: number) => {
         const newLoad: PointLoad = {
             id: `load_${Date.now()}`,
@@ -265,18 +274,22 @@ function MainApp() {
         if (selectedEntity?.type === 'load' && selectedEntity.id === id) setSelectedEntity(null);
     };
 
+
     const handleDeleteWaterPoint = (wlIndex: number, ptIndex: number) => {
+        console.log(`Deleting water point ${ptIndex} from level ${wlIndex}`);
         const next = [...waterLevels];
-        next[wlIndex] = {
-            ...next[wlIndex],
-            points: next[wlIndex].points.filter((_, i) => i !== ptIndex)
-        };
-        setWaterLevels(next);
-        // if (selectedEntity?.type === 'water_level' && selectedEntity.id === idx) setSelectedEntity(null);
+        if (next[wlIndex]) {
+            next[wlIndex] = {
+                ...next[wlIndex],
+                points: next[wlIndex].points.filter((_, i) => i !== ptIndex)
+            };
+            setWaterLevels(next);
+        }
     };
 
     const handleDeleteWaterLevel = (id: string) => {
         if (confirm("Delete this water level?")) {
+            console.log(`Deleting water level ${id}`);
             setWaterLevels(waterLevels.filter(wl => wl.id !== id));
             if (selectedEntity?.type === 'water_level' && selectedEntity.id === id) setSelectedEntity(null);
         }
@@ -287,6 +300,7 @@ function MainApp() {
         next[index] = newWL;
         setWaterLevels(next);
     };
+
 
     const handleSaveProject = () => {
         const metadata: ProjectMetadata = {
@@ -304,7 +318,8 @@ function MainApp() {
             polygons,
             pointLoads,
             lineLoads,
-            waterLevel,
+            waterLevel: waterLevels.length > 0 ? waterLevels[0].points : [],
+            waterLevels,
             phases,
             generalSettings,
             solverSettings,
@@ -411,7 +426,8 @@ function MainApp() {
             polygons,
             pointLoads,
             lineLoads,
-            waterLevel,
+            waterLevel: waterLevels.length > 0 ? waterLevels[0].points : [],
+            waterLevels,
             phases,
             generalSettings,
             solverSettings,
@@ -639,6 +655,8 @@ function MainApp() {
                                         onUpdateLineLoads={setLineLoads}
                                         onAddWaterLevel={handleAddWaterLevel} // NEW
                                         onUpdateWaterLevel={handleUpdateWaterLevel} // NEW
+                                        onDeleteWaterPoint={handleDeleteWaterPoint} // NEW
+                                        onUpdatePolygonPoints={handleUpdatePolygonPoints}
                                         onEditMaterial={setEditingMaterial}
                                         onDeleteMaterial={handleDeleteMaterial}
                                         onDeletePolygon={handleDeletePolygon}
@@ -662,6 +680,8 @@ function MainApp() {
                                     onUpdateLineLoads={setLineLoads}
                                     onAddWaterLevel={handleAddWaterLevel} // NEW
                                     onUpdateWaterLevel={handleUpdateWaterLevel} // NEW
+                                    onDeleteWaterPoint={handleDeleteWaterPoint} // NEW
+                                    onUpdatePolygonPoints={handleUpdatePolygonPoints}
                                     onEditMaterial={setEditingMaterial}
                                     onDeleteMaterial={handleDeleteMaterial}
                                     onDeletePolygon={handleDeletePolygon}
@@ -910,7 +930,15 @@ function MainApp() {
 export default function App() {
     return (
         <AuthProvider>
-            <MainApp />
+            <Routes>
+                <Route path="/" element={<MainApp />} />
+                <Route path="/docs" element={<DocumentationLayout />}>
+                    <Route index element={<Navigate to="introduction" replace />} />
+                    <Route path="introduction" element={<Introduction />} />
+                    <Route path="user-manual" element={<UserManual />} />
+                    <Route path="scientific-reference" element={<ScientificReference />} />
+                </Route>
+            </Routes>
         </AuthProvider>
     );
 }
